@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ----------------------------------------------------------------------- */
+/* Fonts: Fraunces (display serif) + Inter (UI) loaded from Google Fonts.   */
+/* We import here instead of <link> in layout so Next can inline-critical.  */
+/* ----------------------------------------------------------------------- */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap");
+
+/* ----------------------------------------------------------------------- */
+/* Base layer overrides — set the cream background everywhere by default,  */
+/* tune type rendering for editorial feel, kill default Tailwind sharpness. */
+/* ----------------------------------------------------------------------- */
+@layer base {
+  html {
+    @apply bg-cream text-ink;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply font-sans antialiased;
+  }
+
+  /* Display headings use Fraunces with a slightly tighter tracking — the
+   * Stripe / Notion editorial feel comes from this single tweak. */
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tightest;
+  }
+
+  /* Focus rings: subtle amber, no default blue — keeps the palette pure. */
+  *:focus-visible {
+    outline: 2px solid theme("colors.amber.DEFAULT");
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+/* ----------------------------------------------------------------------- */
+/* Reusable component classes — exposed via @apply for legibility in JSX.  */
+/* ----------------------------------------------------------------------- */
+@layer components {
+  /* Primary CTA: the amber pill. 56px tall per Stitch design system. */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+      bg-amber hover:bg-amber-hover
+      text-ink font-semibold
+      rounded-pill px-7 h-14
+      transition-colors duration-150;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+      bg-transparent border border-cream-300
+      text-ink font-medium
+      rounded-pill px-7 h-14
+      hover:bg-cream-200 transition-colors duration-150;
+  }
+
+  /* Eyebrow label — uppercase, wide tracking, taupe. Used above every H1/H2. */
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-eyebrow text-ink-muted;
+  }
+
+  /* Section wrapper — common max-width and horizontal padding. */
+  .section {
+    @apply mx-auto w-full max-w-container px-5 md:px-8;
+  }
+
+  /* Card surface — white over cream, soft border, no shadow per design system. */
+  .card {
+    @apply bg-white border border-cream-300 rounded-2xl p-8;
+  }
+}
