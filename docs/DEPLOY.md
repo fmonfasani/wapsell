@@ -51,50 +51,53 @@ curl -sS -I http://127.0.0.1:3010/es | head -3  # → HTTP/1.1 200 OK
 
 Primera build: ~3 min. Builds posteriores con cache: ~90 seg.
 
-## 4. nginx vhost
+## 4. Bootstrap nginx (HTTP-only, sirve ACME challenge)
+
+El vhost final usa `ssl_certificate` apuntando a un cert que todavía no
+existe — si lo enlazás ya, `nginx -t` falla. Primero levantamos un vhost
+mínimo HTTP-only que sólo sirve el ACME challenge.
 
 ```bash
-cp /opt/wapsell/infra/nginx/wapsell.com.conf /etc/nginx/sites-available/wapsell.com
-ln -s /etc/nginx/sites-available/wapsell.com /etc/nginx/sites-enabled/wapsell.com
-nginx -t                # debería decir "syntax is ok" "test is successful"
-```
+mkdir -p /var/www/certbot
 
-Pero antes de `nginx -s reload`, necesitás el cert (sino el `listen 443 ssl`
-falla). Vamos al paso 5.
+# Instalar el bootstrap (HTTP-only):
+cp /opt/wapsell/infra/nginx/wapsell.com.bootstrap.conf \
+   /etc/nginx/sites-available/wapsell.com
+ln -sf /etc/nginx/sites-available/wapsell.com \
+       /etc/nginx/sites-enabled/wapsell.com
+nginx -t && systemctl reload nginx
+```
 
 ## 5. Certificado TLS con Certbot
 
-Como nginx todavía no escucha en wapsell.com:443, usamos `--standalone` para
-el primer cert (Certbot levanta su propio servidor en :80 brevemente):
+Una vez que el bootstrap está activo y `dig +short wapsell.com` ya devuelve
+`89.167.96.239`:
 
 ```bash
-# Primero comentá temporalmente las server blocks de wapsell en el vhost
-# o renombralo así nginx no falla:
-mv /etc/nginx/sites-enabled/wapsell.com /tmp/wapsell.com.conf.bak
-systemctl reload nginx
-
-# Obtener cert (apex + www en el mismo cert).
-certbot certonly --webroot \
-    -w /var/www/certbot \
+certbot certonly --webroot -w /var/www/certbot \
     -d wapsell.com -d www.wapsell.com \
     --agree-tos -m hola@wapsell.com --no-eff-email
+```
 
-# Si /var/www/certbot no existe todavía:
-mkdir -p /var/www/certbot
+Renovación auto ya está en systemd (`certbot.timer`); confirmá:
 
-# Renovación auto ya está en systemd (certbot.timer); confirmá:
+```bash
 systemctl status certbot.timer
 ```
 
-Después de tener el cert:
+## 6. Promover al vhost completo (HTTPS + reverse proxy)
+
+Ahora que el cert existe, reemplazás el bootstrap con la versión final que
+agrega los server blocks de :443 + el reverse-proxy al container:
 
 ```bash
-mv /tmp/wapsell.com.conf.bak /etc/nginx/sites-enabled/wapsell.com
-nginx -t
+cp /opt/wapsell/infra/nginx/wapsell.com.conf \
+   /etc/nginx/sites-available/wapsell.com
+nginx -t                # debe decir "syntax is ok" "test is successful"
 systemctl reload nginx
 ```
 
-## 6. Smoke test en producción
+## 7. Smoke test en producción
 
 ```bash
 # Resolución DNS:
@@ -117,7 +120,7 @@ curl -sS https://wapsell.com/robots.txt
 curl -sS -I https://wapsell.com/es/opengraph-image  # 200 image/png
 ```
 
-## 7. Update cuando hay nuevo commit
+## 8. Update cuando hay nuevo commit
 
 ```bash
 cd /opt/wapsell
@@ -127,7 +130,7 @@ docker compose up -d --build app
 curl -sS -I https://wapsell.com/es | head -3
 ```
 
-## 8. Rollback si la build nueva rompe algo
+## 9. Rollback si la build nueva rompe algo
 
 ```bash
 cd /opt/wapsell

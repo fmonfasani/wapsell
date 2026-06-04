@@ -7,9 +7,14 @@ FROM node:20-slim AS builder
 
 WORKDIR /build
 
-# Copy manifests first so the npm install layer caches across code changes.
+# Copy manifests first so the install layer caches across code changes.
+# We use `npm install` (not `npm ci`) because the lockfile can drift between
+# the host OS that authored it (Windows) and the Debian-slim node:20 image —
+# transitive deps like @swc/helpers occasionally don't carry across. `install`
+# reconciles in place; the build is still deterministic enough for a marketing
+# site and we trade ~5s of extra build time for a more forgiving deploy.
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install --no-audit --no-fund
 
 # Copy source and build. `output: "standalone"` (set in next.config.js) emits
 # a self-contained .next/standalone/ tree that runs without node_modules.
