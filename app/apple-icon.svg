@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" fill="none">
+  <!-- iOS rounds the corners itself; we paint a full rect. -->
+  <rect width="180" height="180" rx="40" fill="#FAF7F2"/>
+  <!-- "Wapsell" wordmark hint — single bold W mark in deep forest. -->
+  <path d="M50 60 L66 112 L82 76 L98 112 L114 60" stroke="#2D4A3E" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+  <!-- Lever symbol underneath. -->
+  <line x1="38" y1="135" x2="118" y2="135" stroke="#1A1815" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="128" cy="135" r="12" fill="#E4A33B"/>
+</svg>

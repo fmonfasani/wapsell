@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Cream rounded background. -->
+  <rect width="32" height="32" rx="7" fill="#FAF7F2"/>
+  <!-- The "lever" — short horizontal stroke + amber pivot dot.
+       Stroke is espresso so it reads at favicon sizes; dot is amber. -->
+  <line x1="6" y1="20" x2="22" y2="20" stroke="#1A1815" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="24" cy="20" r="3" fill="#E4A33B"/>
+  <!-- Small "W" mark over the lever for the wordmark hint. -->
+  <path d="M9 11 L11 16 L13 12 L15 16 L17 11" stroke="#2D4A3E" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+</svg>
