@@ -1,9 +1,9 @@
-import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
 import { BRAND } from "@/lib/constants";
 
-// Deep forest green footer per Stitch design system. White type, generous
-// padding, no logos or social icons until we have real ones.
 export function Footer() {
+  const t = useTranslations("footer");
   const year = new Date().getFullYear();
 
   return (
@@ -22,23 +22,21 @@ export function Footer() {
 
           <nav className="flex flex-wrap gap-x-7 gap-y-3 text-sm text-white/80">
             <Link href="/demo-tour" className="hover:text-white">
-              Producto
+              {t("product")}
             </Link>
             <Link href="/demo-tour#precios" className="hover:text-white">
-              Precio
+              {t("pricing")}
             </Link>
             <Link href="/demo-tour#faq" className="hover:text-white">
-              FAQ
+              {t("faq")}
             </Link>
             <a href={`mailto:hola@${BRAND.domain}`} className="hover:text-white">
-              Contacto
+              {t("contact")}
             </a>
           </nav>
 
           <div className="text-xs text-white/60">
-            <p>
-              © {year} {BRAND.name}. Privacidad · Términos
-            </p>
+            <p>{t("rights", { year, brand: BRAND.name })}</p>
           </div>
         </div>
       </div>

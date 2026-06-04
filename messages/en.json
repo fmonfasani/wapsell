@@ -1,0 +1,177 @@
+{
+  "nav": {
+    "product": "Product",
+    "pricing": "Pricing",
+    "cta": "Talk to {brand}"
+  },
+  "hero": {
+    "eyebrow": "For premium real estate teams",
+    "title": "Close deals while you sleep.",
+    "sub": "The sales team that never sleeps — qualifies leads and books visits for you.",
+    "cta": "Talk to {brand} now →",
+    "trust": "Try the bot on WhatsApp. No form required."
+  },
+  "problem": {
+    "eyebrow": "The real cost of scaling sales",
+    "line1": "Hiring an SDR costs {price} and takes 3 months to produce.",
+    "line1Price": "$80k+ USD/year",
+    "line2": "{brand} starts tomorrow and never takes a break."
+  },
+  "demoTeaser": {
+    "caption": "This is a real agent, not a script. It answers any question about your catalog.",
+    "linkFullDemo": "See the full demo →"
+  },
+  "shortChat": {
+    "leadTurn1": "Looking for a 3-bedroom in Palermo, ideally with a balcony.",
+    "botTurn1": "Hi! We have 4 units that match. I'll send you 2 with a balcony:",
+    "botTurn2": "▸ Honduras 5400 — USD 320k\n▸ Soler 4100 — USD 285k",
+    "botTurn3": "Want to visit this week? I have Thursday 5pm and Friday 11am open."
+  },
+  "finalCTA": {
+    "title": "How does your team start with {brand}?",
+    "cta": "Talk to {brand} now →",
+    "trust1": "No credit card",
+    "trust2": "No form",
+    "trust3": "Direct WhatsApp"
+  },
+  "chatHeader": {
+    "name": "{brand} AI",
+    "online": "● Online"
+  },
+  "footer": {
+    "product": "Product",
+    "pricing": "Pricing",
+    "faq": "FAQ",
+    "contact": "Contact",
+    "rights": "© {year} {brand}. Privacy · Terms"
+  },
+  "tourHero": {
+    "eyebrow": "Full demo",
+    "title": "This is how {brand} sells — step by step.",
+    "sub": "Chat with the bot while you read. It shows you live what the page explains below.",
+    "cta": "Talk to {brand} now →"
+  },
+  "howItWorks": {
+    "eyebrow": "How it works",
+    "title": "Three steps to add {brand} to your team.",
+    "step1Title": "Connect your WhatsApp Business",
+    "step1Body": "In 5 minutes via Meta Embedded Signup. No code, no complex integrations.",
+    "step2Title": "Upload your catalog and brand voice",
+    "step2Body": "Import your property inventory and your team's tone. {brand} learns how they speak.",
+    "step3Title": "{brand} answers 24/7 and forwards hot leads to you",
+    "step3Body": "Cold leads it qualifies on its own. Hot ones it books directly into your agent's calendar."
+  },
+  "fullDemo": {
+    "eyebrow": "A real conversation",
+    "title": "How {brand} qualifies and books.",
+    "stat1Number": "5 sec",
+    "stat1Label": "response time",
+    "stat2Number": "12 turns",
+    "stat2Label": "to book the visit",
+    "stat3Number": "0 humans",
+    "stat3Label": "involved",
+    "turn1Lead": "Hi, I saw your MercadoLibre listing for the apartment in Palermo.",
+    "turn1Bot": "Hi! I'm {brand}, happy to help. Are you looking to move in yourself or as an investment?",
+    "turn2Lead": "Investment.",
+    "turn2Bot": "Great. We have 4 active units in Palermo today. Do you have a price range in mind?",
+    "turn3Lead": "Up to 350 thousand dollars.",
+    "turn3Bot": "Perfect, all of them fit. Is a balcony a must, or flexible?",
+    "turn4Lead": "Balcony preferred.",
+    "turn4Bot": "Got it. Here are the 2 that best match:\n▸ Honduras 5400 — USD 320k\n▸ Soler 4100 — USD 285k",
+    "turn5Lead": "The Honduras one looks good. When can I see it?",
+    "turn5Bot": "I have slots this week with Martín, our Palermo agent: Thursday 5pm or Friday 11am. Which works best?",
+    "turn6Lead": "Thursday 5pm.",
+    "turn6Bot": "Booked. Martín will confirm via WhatsApp in the next few minutes with the exact address. Anything else?"
+  },
+  "comparison": {
+    "eyebrow": "Comparison",
+    "title": "{brand} vs hiring more SDRs",
+    "colFeature": "Metric",
+    "colSDR": "Human SDR",
+    "colBrand": "{brand}",
+    "row1Feature": "Monthly cost",
+    "row1SDR": "$2-4k USD + commissions",
+    "row1Brand": "Fixed plan, no commissions",
+    "row2Feature": "Onboarding time",
+    "row2SDR": "90 days",
+    "row2Brand": "1 day",
+    "row3Feature": "Leads answered per hour",
+    "row3SDR": "4-6",
+    "row3Brand": "Unlimited",
+    "row4Feature": "Availability",
+    "row4SDR": "Monday to Friday, 9am-6pm",
+    "row4Brand": "24/7, every day",
+    "row5Feature": "Response time",
+    "row5SDR": "30+ minutes",
+    "row5Brand": "Under 5 seconds",
+    "row6Feature": "Vacation / churn",
+    "row6SDR": "Yes",
+    "row6Brand": "Not a thing"
+  },
+  "pricing": {
+    "eyebrow": "Pricing",
+    "title": "Transparent. In US dollars.",
+    "footnote": "Setup at no charge. No lock-in.",
+    "recommended": "Recommended",
+    "perMonth": "/mo",
+    "starterName": "Starter",
+    "starterPrice": "$99",
+    "starterCta": "Try {brand}",
+    "starterF1": "500 conversations / month",
+    "starterF2": "1 WhatsApp number",
+    "starterF3": "Single catalog",
+    "starterF4": "Email support",
+    "proName": "Pro",
+    "proPrice": "$299",
+    "proCta": "Try {brand}",
+    "proF1": "2,000 conversations / month",
+    "proF2": "1 WhatsApp number",
+    "proF3": "Catalog + semantic RAG",
+    "proF4": "Priority WhatsApp support",
+    "proF5": "CRM integration (HubSpot, Pipedrive)",
+    "proF6": "Message templates",
+    "enterpriseName": "Enterprise",
+    "enterprisePrice": "Custom",
+    "enterpriseCta": "Talk to sales →",
+    "enterpriseF1": "Unlimited conversations",
+    "enterpriseF2": "Multi-number",
+    "enterpriseF3": "Dedicated CSM",
+    "enterpriseF4": "Custom integrations",
+    "enterpriseF5": "SLA guaranteed"
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "title": "Frequently asked questions",
+    "q1": "Does {brand} replace my sales team?",
+    "a1": "No. {brand} filters and books. Your team closes — but now only with pre-qualified leads and full conversation context.",
+    "q2": "Does it work with listing portals like Zonaprop or Argenprop?",
+    "a2": "Yes. We connect the WhatsApp number tied to your Zonaprop, Argenprop, MercadoLibre or any portal listings. Leads land in the chat and {brand} qualifies them before passing to your team.",
+    "q3": "Can it book visits directly into my calendar?",
+    "a3": "Yes, via Google Calendar or your CRM's calendar. {brand} sees the agent's real availability and reserves the slot inside the conversation.",
+    "q4": "Does it work with HubSpot, Salesforce or Pipedrive?",
+    "a4": "Yes, via API. Available on Pro plan and above. Each lead is qualified, created as a contact, and conversations are auto-logged.",
+    "q5": "Who owns the conversations?",
+    "a5": "You do. The data lives in your storage, not ours. You can export it anytime or ask us to delete it.",
+    "q6": "How does it connect with my current WhatsApp?",
+    "a6": "In 5 minutes via Meta Embedded Signup. We help you register a WhatsApp Business number or port the one you already use.",
+    "q7": "What happens if a buyer asks something very complex?",
+    "a7": "{brand} hands off to a human agent with the full conversation context. The customer never waits and never gets a wrong answer.",
+    "q8": "Do you accept credit cards?",
+    "a8": "Yes, via Stripe or Mercado Pago. Monthly or annual subscription with 15% off on annual. Bank transfer accepted for annual."
+  },
+  "lang": {
+    "labelEs": "Español",
+    "labelEn": "English",
+    "shortEs": "ES",
+    "shortEn": "EN"
+  },
+  "meta": {
+    "homeTitle": "{brand} — Close deals while you sleep.",
+    "homeDescription": "An AI WhatsApp sales agent for premium real estate. Qualifies leads, books visits, never sleeps. Try it now.",
+    "tourTitle": "{brand} — Full demo, pricing, FAQ",
+    "tourDescription": "See how {brand} qualifies real estate leads, books visits, and integrates with your CRM. Pricing, comparison vs human SDRs, and FAQ."
+  },
+  "wa": {
+    "greeting": "Hi, I saw the {brand} website and wanted to learn how the bot works for my real estate team."
+  }
+}

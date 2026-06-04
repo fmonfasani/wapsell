@@ -1,0 +1,177 @@
+{
+  "nav": {
+    "product": "Producto",
+    "pricing": "Precio",
+    "cta": "Hablá con {brand}"
+  },
+  "hero": {
+    "eyebrow": "Para inmobiliarias premium",
+    "title": "Cerrá ventas mientras dormís.",
+    "sub": "El equipo comercial que nunca duerme, califica leads y agenda visitas por vos.",
+    "cta": "Hablá con {brand} ahora →",
+    "trust": "Probá el bot en WhatsApp. Sin formulario."
+  },
+  "problem": {
+    "eyebrow": "El verdadero costo de escalar ventas",
+    "line1": "Contratar un SDR cuesta {price} y tarda 3 meses en producir.",
+    "line1Price": "$1M+/año",
+    "line2": "{brand} arranca mañana y atiende sin pausa."
+  },
+  "demoTeaser": {
+    "caption": "Esto es un agente real, no un script. Contesta cualquier consulta sobre tu catálogo.",
+    "linkFullDemo": "Mirá el demo completo →"
+  },
+  "shortChat": {
+    "leadTurn1": "Busco 3 amb en Palermo, mejor que tenga balcón.",
+    "botTurn1": "¡Hola! Tenemos 4 unidades que encajan. Te paso 2 con balcón:",
+    "botTurn2": "▸ Honduras 5400 — USD 320k\n▸ Soler 4100 — USD 285k",
+    "botTurn3": "¿Visitás esta semana? Tengo huecos jueves 17h y viernes 11h."
+  },
+  "finalCTA": {
+    "title": "¿Cómo arranca tu equipo con {brand}?",
+    "cta": "Hablá con {brand} ahora →",
+    "trust1": "Sin tarjeta",
+    "trust2": "Sin formulario",
+    "trust3": "WhatsApp directo"
+  },
+  "chatHeader": {
+    "name": "{brand} AI",
+    "online": "● En línea"
+  },
+  "footer": {
+    "product": "Producto",
+    "pricing": "Precio",
+    "faq": "FAQ",
+    "contact": "Contacto",
+    "rights": "© {year} {brand}. Privacidad · Términos"
+  },
+  "tourHero": {
+    "eyebrow": "Demo completo",
+    "title": "Así vende {brand} — paso a paso.",
+    "sub": "Hablá con el bot mientras leés. Te muestra en vivo lo que la página explica abajo.",
+    "cta": "Hablá con {brand} ahora →"
+  },
+  "howItWorks": {
+    "eyebrow": "Cómo funciona",
+    "title": "Tres pasos para que {brand} sume a tu equipo.",
+    "step1Title": "Conectá tu WhatsApp Business",
+    "step1Body": "En 5 minutos vía Meta Embedded Signup. Sin código, sin integraciones complejas.",
+    "step2Title": "Cargá tu catálogo y tu marca",
+    "step2Body": "Subí tu inventario de propiedades y el tono de tu equipo. {brand} aprende cómo hablan.",
+    "step3Title": "{brand} responde 24/7 y te pasa los hot leads",
+    "step3Body": "Los leads fríos los califica solo. Los calientes te los agenda en la agenda de tu vendedor."
+  },
+  "fullDemo": {
+    "eyebrow": "Conversación real",
+    "title": "Así califica y agenda {brand}.",
+    "stat1Number": "5 seg",
+    "stat1Label": "tiempo de respuesta",
+    "stat2Number": "12 turnos",
+    "stat2Label": "para cerrar la visita",
+    "stat3Number": "0 humanos",
+    "stat3Label": "involucrados",
+    "turn1Lead": "Hola, vi su aviso en MercadoLibre por el departamento en Palermo.",
+    "turn1Bot": "¡Hola! Soy {brand}, te ayudo con la consulta. ¿Estás buscando para mudarte vos o como inversión?",
+    "turn2Lead": "Inversión.",
+    "turn2Bot": "Genial. Tenemos 4 unidades en Palermo activas hoy. ¿Tenés rango de precio en mente?",
+    "turn3Lead": "Hasta 350 mil dólares.",
+    "turn3Bot": "Perfecto, todas entran. ¿Con balcón o no es determinante para vos?",
+    "turn4Lead": "Mejor con balcón.",
+    "turn4Bot": "Listo. Te paso las 2 que mejor encajan:\n▸ Honduras 5400 — USD 320k\n▸ Soler 4100 — USD 285k",
+    "turn5Lead": "El de Honduras me gusta. Cuándo lo puedo ver?",
+    "turn5Bot": "Tengo huecos esta semana con Martín, nuestro asesor de Palermo: jueves 17h o viernes 11h. ¿Cuál te queda mejor?",
+    "turn6Lead": "Jueves 17h.",
+    "turn6Bot": "Reservado. Martín te confirma por WhatsApp en los próximos minutos con la dirección exacta. ¿Algo más?"
+  },
+  "comparison": {
+    "eyebrow": "Comparativa",
+    "title": "{brand} vs contratar más SDRs",
+    "colFeature": "Característica",
+    "colSDR": "SDR humano",
+    "colBrand": "{brand}",
+    "row1Feature": "Costo mensual",
+    "row1SDR": "$80-120k ARS + comisiones",
+    "row1Brand": "Plan fijo, sin comisiones",
+    "row2Feature": "Tiempo de onboarding",
+    "row2SDR": "90 días",
+    "row2Brand": "1 día",
+    "row3Feature": "Leads respondidos por hora",
+    "row3SDR": "4-6",
+    "row3Brand": "Ilimitados",
+    "row4Feature": "Disponibilidad",
+    "row4SDR": "Lunes a viernes, 9-18h",
+    "row4Brand": "24/7, todos los días",
+    "row5Feature": "Tiempo de respuesta",
+    "row5SDR": "30+ minutos",
+    "row5Brand": "Menos de 5 segundos",
+    "row6Feature": "Vacaciones / rotación",
+    "row6SDR": "Sí",
+    "row6Brand": "No aplica"
+  },
+  "pricing": {
+    "eyebrow": "Precios",
+    "title": "Transparentes. En dólares.",
+    "footnote": "Setup inicial sin cargo. Sin permanencia.",
+    "recommended": "Recomendado",
+    "perMonth": "/mes",
+    "starterName": "Starter",
+    "starterPrice": "$99",
+    "starterCta": "Probá {brand}",
+    "starterF1": "500 conversaciones / mes",
+    "starterF2": "1 número WhatsApp",
+    "starterF3": "Catálogo único",
+    "starterF4": "Soporte por email",
+    "proName": "Pro",
+    "proPrice": "$299",
+    "proCta": "Probá {brand}",
+    "proF1": "2.000 conversaciones / mes",
+    "proF2": "1 número WhatsApp",
+    "proF3": "Catálogo + RAG semántico",
+    "proF4": "Soporte WhatsApp prioritario",
+    "proF5": "Integración CRM (HubSpot, Pipedrive)",
+    "proF6": "Templates de mensajes",
+    "enterpriseName": "Enterprise",
+    "enterprisePrice": "A medida",
+    "enterpriseCta": "Hablar con ventas →",
+    "enterpriseF1": "Conversaciones ilimitadas",
+    "enterpriseF2": "Multi-número",
+    "enterpriseF3": "CSM dedicado",
+    "enterpriseF4": "Integraciones custom",
+    "enterpriseF5": "SLA garantizado"
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "title": "Preguntas frecuentes",
+    "q1": "¿{brand} reemplaza a mi equipo de ventas?",
+    "a1": "No. {brand} filtra y agenda. El cierre humano lo hacen tus vendedores con leads ya calificados y contexto completo de la conversación.",
+    "q2": "¿Funciona con portales como Zonaprop o Argenprop?",
+    "a2": "Sí. Conectamos el WhatsApp asociado a tus avisos en Zonaprop, Argenprop, MercadoLibre o el portal que uses. El lead llega al chat y {brand} lo califica antes de pasarlo a tu equipo.",
+    "q3": "¿Puede agendar visitas directamente en mi calendario?",
+    "a3": "Sí, vía Google Calendar o el calendario de tu CRM. {brand} ve la disponibilidad real del asesor y reserva el slot en la conversación.",
+    "q4": "¿Funciona con HubSpot, Salesforce o Pipedrive?",
+    "a4": "Sí, integramos por API. Disponible en plan Pro y superior. Cada lead califica + se crea como contacto + se logean las conversaciones automáticamente.",
+    "q5": "¿Quién es dueño de las conversaciones?",
+    "a5": "Vos. Los datos están en tu base, no en la nuestra. Podés exportarlos en cualquier momento o pedir que los borremos.",
+    "q6": "¿Cómo se conecta con mi WhatsApp actual?",
+    "a6": "En 5 minutos vía Meta Embedded Signup. Te ayudamos a registrar tu número de WhatsApp Business o portar el que ya usás.",
+    "q7": "¿Qué pasa si el cliente pregunta algo muy complejo?",
+    "a7": "{brand} deriva al vendedor humano con todo el contexto de la conversación. El cliente nunca queda esperando ni recibe respuestas erróneas.",
+    "q8": "¿Aceptan tarjeta de crédito?",
+    "a8": "Sí, vía Mercado Pago. Suscripción mensual o anual con 15% off. También aceptamos transferencia para anual."
+  },
+  "lang": {
+    "labelEs": "Español",
+    "labelEn": "English",
+    "shortEs": "ES",
+    "shortEn": "EN"
+  },
+  "meta": {
+    "homeTitle": "{brand} — Cerrá ventas mientras dormís.",
+    "homeDescription": "Agente comercial de IA en WhatsApp para inmobiliarias premium. Califica leads, agenda visitas y nunca duerme. Probalo ahora.",
+    "tourTitle": "{brand} — Demo completo + precios + FAQ",
+    "tourDescription": "Mirá cómo {brand} califica leads inmobiliarios, agenda visitas y se integra a tu CRM. Precios, comparativa con SDRs humanos y preguntas frecuentes."
+  },
+  "wa": {
+    "greeting": "Hola, vi la web de {brand} y quería saber cómo funciona el bot para mi inmobiliaria."
+  }
+}

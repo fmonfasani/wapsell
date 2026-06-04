@@ -1,16 +1,25 @@
-import Link from "next/link";
-import { ChatMockup } from "./ChatMockup";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
+import { ChatMockup, type Turn } from "./ChatMockup";
 
-// Product-shot of the landing: short chat conversation + link to /demo-tour
-// where the full conversation lives. White background so it pops against the
-// cream sections above and below.
 export function DemoTeaser() {
+  const t = useTranslations();
+  const tChat = useTranslations("shortChat");
+
+  const turns: Turn[] = [
+    { role: "lead", text: tChat("leadTurn1") },
+    { role: "bot", text: tChat("botTurn1") },
+    { role: "bot", text: tChat("botTurn2") },
+    { role: "bot", text: tChat("botTurn3") },
+  ];
+
   return (
     <section className="bg-white py-24 md:py-32">
       <div className="section">
         <ChatMockup
           variant="forest"
-          caption="Esto es un agente real, no un script. Contesta cualquier consulta sobre tu catálogo."
+          turns={turns}
+          caption={t("demoTeaser.caption")}
         />
 
         <div className="mt-10 text-center">
@@ -18,7 +27,7 @@ export function DemoTeaser() {
             href="/demo-tour"
             className="text-amber font-medium underline underline-offset-4 hover:text-amber-hover"
           >
-            Mirá el demo completo →
+            {t("demoTeaser.linkFullDemo")}
           </Link>
         </div>
       </div>

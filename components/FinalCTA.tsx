@@ -1,34 +1,37 @@
-import { BRAND, WA_LINK } from "@/lib/constants";
+import { useTranslations } from "next-intl";
+import { BRAND, buildWaLink } from "@/lib/constants";
 
-// Closing punctuation of the landing. Same amber CTA as hero so visitors who
-// scrolled past don't need to scroll back up to act.
 export function FinalCTA() {
+  const t = useTranslations();
+  const greeting = t("wa.greeting", { brand: BRAND.name });
+  const waLink = buildWaLink(greeting);
+
   return (
     <section className="bg-cream py-28 md:py-40">
       <div className="section text-center">
         <h2 className="font-display font-medium text-3xl md:text-5xl leading-tight max-w-2xl mx-auto">
-          ¿Cómo arranca tu equipo con {BRAND.name}?
+          {t("finalCTA.title", { brand: BRAND.name })}
         </h2>
 
         <div className="mt-10 flex flex-col items-center gap-4">
           <a
-            href={WA_LINK}
+            href={waLink}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-primary text-base"
           >
-            Hablá con {BRAND.name} ahora →
+            {t("finalCTA.cta", { brand: BRAND.name })}
           </a>
 
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-ink-muted">
             <span className="flex items-center gap-1.5">
-              <Dot /> Sin tarjeta
+              <Dot /> {t("finalCTA.trust1")}
             </span>
             <span className="flex items-center gap-1.5">
-              <Dot /> Sin formulario
+              <Dot /> {t("finalCTA.trust2")}
             </span>
             <span className="flex items-center gap-1.5">
-              <Dot /> WhatsApp directo
+              <Dot /> {t("finalCTA.trust3")}
             </span>
           </div>
         </div>

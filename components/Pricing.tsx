@@ -1,91 +1,100 @@
-import { WA_LINK } from "@/lib/constants";
-
-// Three tiers. Pro is featured (amber border + recommended badge). Prices in
-// USD per the latest pricing call. JetBrains Mono for the big numbers — the
-// "magazine pull-quote" treatment from the Stitch design system.
+import { useTranslations } from "next-intl";
+import { BRAND, buildWaLink } from "@/lib/constants";
 
 type Tier = {
   name: string;
   price: string;
   cadence?: string;
-  setup?: string;
   features: string[];
   cta: string;
-  ctaHref: string;
   featured?: boolean;
 };
 
-const TIERS: Tier[] = [
-  {
-    name: "Starter",
-    price: "$99",
-    cadence: "/mes",
-    features: [
-      "500 conversaciones / mes",
-      "1 número WhatsApp",
-      "Catálogo único",
-      "Soporte por email",
-    ],
-    cta: "Probá Wapsell",
-    ctaHref: WA_LINK,
-  },
-  {
-    name: "Pro",
-    price: "$299",
-    cadence: "/mes",
-    features: [
-      "2.000 conversaciones / mes",
-      "1 número WhatsApp",
-      "Catálogo + RAG semántico",
-      "Soporte WhatsApp prioritario",
-      "Integración CRM (HubSpot, Pipedrive)",
-      "Templates de mensajes",
-    ],
-    cta: "Probá Wapsell",
-    ctaHref: WA_LINK,
-    featured: true,
-  },
-  {
-    name: "Enterprise",
-    price: "A medida",
-    features: [
-      "Conversaciones ilimitadas",
-      "Multi-número",
-      "CSM dedicado",
-      "Integraciones custom",
-      "SLA garantizado",
-    ],
-    cta: "Call with sales →",
-    ctaHref: WA_LINK,
-  },
-];
-
 export function Pricing() {
+  const t = useTranslations("pricing");
+  const tWa = useTranslations("wa");
+  const waLink = buildWaLink(tWa("greeting", { brand: BRAND.name }));
+
+  const tiers: Tier[] = [
+    {
+      name: t("starterName"),
+      price: t("starterPrice"),
+      cadence: t("perMonth"),
+      features: [
+        t("starterF1"),
+        t("starterF2"),
+        t("starterF3"),
+        t("starterF4"),
+      ],
+      cta: t("starterCta", { brand: BRAND.name }),
+    },
+    {
+      name: t("proName"),
+      price: t("proPrice"),
+      cadence: t("perMonth"),
+      features: [
+        t("proF1"),
+        t("proF2"),
+        t("proF3"),
+        t("proF4"),
+        t("proF5"),
+        t("proF6"),
+      ],
+      cta: t("proCta", { brand: BRAND.name }),
+      featured: true,
+    },
+    {
+      name: t("enterpriseName"),
+      price: t("enterprisePrice"),
+      features: [
+        t("enterpriseF1"),
+        t("enterpriseF2"),
+        t("enterpriseF3"),
+        t("enterpriseF4"),
+        t("enterpriseF5"),
+      ],
+      cta: t("enterpriseCta"),
+    },
+  ];
+
   return (
     <section id="precios" className="bg-cream py-24 md:py-32">
       <div className="section">
         <div className="text-center mb-12">
-          <p className="eyebrow mb-4">Precios</p>
+          <p className="eyebrow mb-4">{t("eyebrow")}</p>
           <h2 className="font-display font-medium text-3xl md:text-5xl leading-tight">
-            Transparentes. En dólares.
+            {t("title")}
           </h2>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {TIERS.map((t) => (
-            <PricingCard key={t.name} tier={t} />
+          {tiers.map((tier) => (
+            <PricingCard
+              key={tier.name}
+              tier={tier}
+              recommendedLabel={t("recommended")}
+              ctaHref={waLink}
+            />
           ))}
         </div>
 
         <p className="text-center text-xs text-ink-muted mt-10">
-          Setup inicial sin cargo. Sin permanencia.
+          {t("footnote")}
         </p>
       </div>
     </section>
   );
 }
 
-function PricingCard({ tier }: { tier: Tier }) {
+function PricingCard({
+  tier,
+  recommendedLabel,
+  ctaHref,
+}: {
+  tier: Tier;
+  recommendedLabel: string;
+  ctaHref: string;
+}) {
   const featuredCls = tier.featured
     ? "border-2 border-amber bg-white relative md:-translate-y-3"
     : "border border-cream-300 bg-white";
@@ -94,7 +103,7 @@ function PricingCard({ tier }: { tier: Tier }) {
     <div className={`rounded-2xl p-8 flex flex-col ${featuredCls}`}>
       {tier.featured ? (
         <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber text-ink text-xs font-semibold uppercase tracking-eyebrow px-3 py-1 rounded-pill">
-          Recomendado
+          {recommendedLabel}
         </span>
       ) : null}
 
@@ -121,7 +130,7 @@ function PricingCard({ tier }: { tier: Tier }) {
       </ul>
 
       <a
-        href={tier.ctaHref}
+        href={ctaHref}
         target="_blank"
         rel="noopener noreferrer"
         className={
