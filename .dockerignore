@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.github
+.vercel
+.vscode
+.idea
+.env*.local
+README.md
+.dockerignore
+Dockerfile
+docs

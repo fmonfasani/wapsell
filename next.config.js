@@ -1,12 +1,14 @@
 const createNextIntlPlugin = require("next-intl/plugin");
 
-// `i18n/request.ts` is the default location next-intl looks in for the
-// server-side config; passing the path explicitly makes the wiring obvious.
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Standalone output ships a self-contained server.js + only the deps Next
+  // actually used, which keeps the runtime Docker image around 150 MB instead
+  // of 1+ GB. Required by the multi-stage Dockerfile.
+  output: "standalone",
 };
 
 module.exports = withNextIntl(nextConfig);
