@@ -25,7 +25,7 @@ export function PrivacyEs() {
         <strong>Fulvio Monfasani</strong>, monotributista CUIT a disposición a
         requerimiento, con domicilio en la Provincia de Córdoba, Argentina.
         Podés contactarnos en{" "}
-        <a href="mailto:hola@wapsell.com">hola@wapsell.com</a>.
+        <a href="mailto:contact@wapsell.com">contact@wapsell.com</a>.
       </p>
 
       <h2>2. Datos que recolectamos</h2>
@@ -155,7 +155,7 @@ export function PrivacyEs() {
       </ul>
       <p>
         Para ejercer cualquiera de estos derechos escribinos a{" "}
-        <a href="mailto:hola@wapsell.com">hola@wapsell.com</a>. Te respondemos
+        <a href="mailto:contact@wapsell.com">contact@wapsell.com</a>. Te respondemos
         dentro de los 10 días corridos.
       </p>
       <p>
@@ -204,7 +204,7 @@ export function PrivacyEs() {
       <h2>12. Contacto</h2>
       <p>
         Cualquier consulta sobre esta política, escribinos a{" "}
-        <a href="mailto:hola@wapsell.com">hola@wapsell.com</a>.
+        <a href="mailto:contact@wapsell.com">contact@wapsell.com</a>.
       </p>
     </LegalShell>
   );

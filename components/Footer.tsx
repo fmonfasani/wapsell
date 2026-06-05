@@ -30,7 +30,10 @@ export function Footer() {
             <Link href="/demo-tour#faq" className="hover:text-white">
               {t("faq")}
             </Link>
-            <a href={`mailto:hola@${BRAND.domain}`} className="hover:text-white">
+            <a
+              href={`mailto:${BRAND.contactEmail}`}
+              className="hover:text-white"
+            >
               {t("contact")}
             </a>
           </nav>

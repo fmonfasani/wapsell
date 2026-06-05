@@ -6,6 +6,10 @@ export const BRAND = {
   // Pivot-point symbol; rendered inline next to the wordmark.
   symbol: "─●",
   domain: "wapsell.com",
+  // Commercial contact for the footer, legal pages and any inbound flows.
+  // Routed via Namecheap Email Forwarding (free) into the founder's
+  // personal inbox until a managed mailbox is set up.
+  contactEmail: "contact@wapsell.com",
 } as const;
 
 // E.164 without "+". Swap to the dedicated Twilio number once registered.

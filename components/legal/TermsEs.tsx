@@ -151,7 +151,7 @@ export function TermsEs() {
       <h2>11. Contacto</h2>
       <p>
         Para consultas sobre estos términos escribinos a{" "}
-        <a href="mailto:hola@wapsell.com">hola@wapsell.com</a>.
+        <a href="mailto:contact@wapsell.com">contact@wapsell.com</a>.
       </p>
     </LegalShell>
   );

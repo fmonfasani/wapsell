@@ -141,7 +141,7 @@ export function TermsEn() {
       <h2>11. Contact</h2>
       <p>
         Questions about these terms: write to{" "}
-        <a href="mailto:hola@wapsell.com">hola@wapsell.com</a>.
+        <a href="mailto:contact@wapsell.com">contact@wapsell.com</a>.
       </p>
     </LegalShell>
   );

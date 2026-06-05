@@ -22,7 +22,7 @@ export function PrivacyEn() {
         The controller of your personal data is <strong>Fulvio Monfasani</strong>,
         a sole proprietor registered in Argentina (CUIT available on request),
         based in Córdoba Province. You can reach us at{" "}
-        <a href="mailto:hola@wapsell.com">hola@wapsell.com</a>.
+        <a href="mailto:contact@wapsell.com">contact@wapsell.com</a>.
       </p>
 
       <h2>2. Data we collect</h2>
@@ -140,7 +140,7 @@ export function PrivacyEn() {
       </ul>
       <p>
         To exercise any of these rights write to{" "}
-        <a href="mailto:hola@wapsell.com">hola@wapsell.com</a>. We respond
+        <a href="mailto:contact@wapsell.com">contact@wapsell.com</a>. We respond
         within 10 business days.
       </p>
 
@@ -177,7 +177,7 @@ export function PrivacyEn() {
       <h2>12. Contact</h2>
       <p>
         Any question about this policy, write to{" "}
-        <a href="mailto:hola@wapsell.com">hola@wapsell.com</a>.
+        <a href="mailto:contact@wapsell.com">contact@wapsell.com</a>.
       </p>
     </LegalShell>
   );
