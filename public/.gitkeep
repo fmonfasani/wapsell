@@ -1,0 +1,6 @@
+# Keep this directory alive in git so the Dockerfile's COPY --from=builder
+# /build/public stays happy even when there are no static assets yet.
+#
+# When you do drop real files in here (a /favicon.ico fallback, /robots.txt
+# override, social-share PNG variants, custom fonts) they get served
+# straight from the Next.js public/ root — no rebuild path tricks.
