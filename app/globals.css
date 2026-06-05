@@ -75,4 +75,29 @@
   .card {
     @apply bg-white border border-cream-300 rounded-2xl p-8;
   }
+
+  /* Legal prose — vertical rhythm tuned for long-form reading. */
+  .legal-prose h2 {
+    @apply font-display font-semibold text-2xl mt-12 mb-4 text-ink;
+  }
+
+  .legal-prose h3 {
+    @apply font-sans font-semibold text-base mt-6 mb-2 text-ink uppercase tracking-wider;
+  }
+
+  .legal-prose p {
+    @apply text-ink-muted leading-relaxed mb-4;
+  }
+
+  .legal-prose ul {
+    @apply list-disc pl-6 space-y-2 mb-4 text-ink-muted;
+  }
+
+  .legal-prose a {
+    @apply text-forest underline underline-offset-4 hover:text-amber transition-colors;
+  }
+
+  .legal-prose strong {
+    @apply text-ink font-semibold;
+  }
 }

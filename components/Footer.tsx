@@ -35,7 +35,15 @@ export function Footer() {
             </a>
           </nav>
 
-          <div className="text-xs text-white/60">
+          <div className="flex flex-col md:items-end gap-2 text-xs text-white/60">
+            <div className="flex gap-4">
+              <Link href="/privacy" className="hover:text-white">
+                {t("privacyLink")}
+              </Link>
+              <Link href="/terms" className="hover:text-white">
+                {t("termsLink")}
+              </Link>
+            </div>
             <p>{t("rights", { year, brand: BRAND.name })}</p>
           </div>
         </div>

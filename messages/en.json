@@ -43,7 +43,9 @@
     "pricing": "Pricing",
     "faq": "FAQ",
     "contact": "Contact",
-    "rights": "© {year} {brand}. Privacy · Terms"
+    "privacyLink": "Privacy",
+    "termsLink": "Terms",
+    "rights": "© {year} {brand}. All rights reserved."
   },
   "tourHero": {
     "eyebrow": "Full demo",

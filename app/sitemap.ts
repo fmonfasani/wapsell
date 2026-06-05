@@ -7,14 +7,14 @@ import { BRAND } from "@/lib/constants";
 // the right one based on the user's `Accept-Language`.
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = `https://${BRAND.domain}`;
-  const routes = ["", "/demo-tour"];
+  const routes = ["", "/demo-tour", "/privacy", "/terms"];
 
   return routes.flatMap((path) =>
     routing.locales.map((locale) => ({
       url: `${base}/${locale}${path}`,
       lastModified: new Date(),
       changeFrequency: "monthly" as const,
-      priority: path === "" ? 1 : 0.8,
+      priority: path === "" ? 1 : path === "/demo-tour" ? 0.8 : 0.3,
       alternates: {
         languages: Object.fromEntries(
           routing.locales.map((l) => [l, `${base}/${l}${path}`]),
