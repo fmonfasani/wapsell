@@ -36,10 +36,10 @@ export function Navbar() {
           </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {user ? (
               <>
-                {/* Demo link */}
+                {/* Demo link for authenticated users */}
                 <Link
                   href="/demo"
                   className="text-slate-600 hover:text-slate-900 text-sm font-medium"
