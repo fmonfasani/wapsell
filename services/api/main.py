@@ -10,14 +10,19 @@ import sqlite3
 import tempfile
 import time
 from typing import Optional
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, field_validator
 
+# Load environment variables
+load_dotenv()
+
 # Hermes/Waseller imports
 from wapsell.client import WapsellClient
 from wapsell.models import Fact, Tenant
+from wapsell.llm.port import OpenRouterLLM
 
 try:
     import openpyxl
@@ -437,10 +442,18 @@ app = FastAPI()
 # Initialize database
 init_db()
 
-# Initialize Hermes/Wapsell client for RAG
+# Initialize Hermes/Wapsell client for RAG with OpenRouter LLM
 def init_hermes_client():
-    """Initialize WapsellClient with properties loaded as Facts in Hindsight."""
-    client = WapsellClient()
+    """Initialize WapsellClient with OpenRouter LLM (gpt-4o-mini) + properties in Hindsight."""
+
+    # Initialize OpenRouter LLM (uses OPENROUTER_API_KEY from .env)
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    model = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+
+    llm = OpenRouterLLM(api_key=api_key, model=model)
+
+    # Create client with custom LLM
+    client = WapsellClient(llm=llm)
 
     # Create a demo tenant
     demo_tenant = Tenant(
@@ -448,6 +461,7 @@ def init_hermes_client():
         slug="demo",
         name="Demo Tenant",
         plan="pro",
+        model=model,
         created_at=datetime.now(UTC).isoformat()
     )
     try:
@@ -474,6 +488,7 @@ def init_hermes_client():
         )
         client.hindsight.add_fact(fact)
 
+    logging.info(f"Hermes initialized with LLM={model}, properties={len(properties)}")
     return client
 
 hermes_client = init_hermes_client()
