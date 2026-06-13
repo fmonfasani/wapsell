@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 import hashlib
+import os
 import secrets
 import sqlite3
 from typing import Optional
@@ -12,7 +13,7 @@ from pydantic import BaseModel
 
 # --- Database Setup ---
 
-DB_PATH = "/tmp/wapsell.db"
+DB_PATH = os.path.join(os.path.dirname(__file__), "wapsell.db")
 
 def init_db():
     """Initialize SQLite database with users and sessions tables."""
