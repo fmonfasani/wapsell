@@ -220,7 +220,7 @@ export default function DemoChatPage() {
                 <div
                   className={`max-w-xs px-4 py-2 rounded-lg ${
                     msg.role === "user"
-                      ? "bg-brand-600 text-white rounded-br-none"
+                      ? "bg-amber text-white rounded-br-none font-semibold"
                       : "bg-slate-100 text-slate-900 rounded-bl-none"
                   }`}
                 >
