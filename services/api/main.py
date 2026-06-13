@@ -291,6 +291,29 @@ def get_chat_history(user_id: str) -> list:
     conn.close()
     return messages
 
+def normalize_row(row: dict) -> dict:
+    """Normalize row keys to lowercase and handle variations."""
+    normalized = {}
+    key_map = {
+        'title': ['title', 'nombre', 'name', 'propiedad'],
+        'type': ['type', 'tipo', 'categoria'],
+        'location': ['location', 'ubicacion', 'barrio', 'zona'],
+        'description': ['description', 'descripcion', 'detalle'],
+        'price': ['price', 'precio', 'valor'],
+        'bedrooms': ['bedrooms', 'dormitorios', 'dorm', 'habitaciones'],
+        'bathrooms': ['bathrooms', 'banos', 'baños'],
+        'address': ['address', 'direccion', 'calle'],
+        'area': ['area', 'superficie', 'm2', 'metros'],
+    }
+
+    for standard_key, aliases in key_map.items():
+        for row_key, row_val in row.items():
+            if row_key.lower() in aliases or row_key.lower() in [a.lower() for a in aliases]:
+                normalized[standard_key] = row_val
+                break
+
+    return normalized
+
 def parse_csv(file_path: str) -> list:
     """Parse CSV file and extract property data."""
     properties = []
@@ -298,19 +321,20 @@ def parse_csv(file_path: str) -> list:
         with open(file_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                if all(k in row for k in ['title', 'type', 'location']):
+                normalized = normalize_row(row)
+                if all(k in normalized for k in ['title', 'type', 'location']):
                     prop_id = secrets.token_urlsafe(8)
                     properties.append({
                         'id': prop_id,
-                        'title': row.get('title', ''),
-                        'description': row.get('description', ''),
-                        'type': row.get('type', ''),
-                        'price': float(row.get('price', 0)) if row.get('price') else 0,
-                        'bedrooms': int(row.get('bedrooms', 1)) if row.get('bedrooms') else 1,
-                        'bathrooms': int(row.get('bathrooms', 1)) if row.get('bathrooms') else 1,
-                        'location': row.get('location', ''),
-                        'address': row.get('address', ''),
-                        'area': float(row.get('area', 0)) if row.get('area') else 0,
+                        'title': str(normalized.get('title', '')),
+                        'description': str(normalized.get('description', '')),
+                        'type': str(normalized.get('type', '')),
+                        'price': float(normalized.get('price', 0)) if normalized.get('price') else 0,
+                        'bedrooms': int(normalized.get('bedrooms', 1)) if normalized.get('bedrooms') else 1,
+                        'bathrooms': int(normalized.get('bathrooms', 1)) if normalized.get('bathrooms') else 1,
+                        'location': str(normalized.get('location', '')),
+                        'address': str(normalized.get('address', '')),
+                        'area': float(normalized.get('area', 0)) if normalized.get('area') else 0,
                     })
     except Exception as e:
         logging.error(f"CSV parsing error: {str(e)}")
@@ -328,19 +352,20 @@ def parse_excel(file_path: str) -> list:
         for row in ws.iter_rows(min_row=2, values_only=True):
             if len(row) > 0 and row[0]:
                 data = dict(zip(headers, row))
-                if all(k in data for k in ['title', 'type', 'location']):
+                normalized = normalize_row(data)
+                if all(k in normalized for k in ['title', 'type', 'location']):
                     prop_id = secrets.token_urlsafe(8)
                     properties.append({
                         'id': prop_id,
-                        'title': str(data.get('title', '')),
-                        'description': str(data.get('description', '')),
-                        'type': str(data.get('type', '')),
-                        'price': float(data.get('price', 0)) if data.get('price') else 0,
-                        'bedrooms': int(data.get('bedrooms', 1)) if data.get('bedrooms') else 1,
-                        'bathrooms': int(data.get('bathrooms', 1)) if data.get('bathrooms') else 1,
-                        'location': str(data.get('location', '')),
-                        'address': str(data.get('address', '')),
-                        'area': float(data.get('area', 0)) if data.get('area') else 0,
+                        'title': str(normalized.get('title', '')),
+                        'description': str(normalized.get('description', '')),
+                        'type': str(normalized.get('type', '')),
+                        'price': float(normalized.get('price', 0)) if normalized.get('price') else 0,
+                        'bedrooms': int(normalized.get('bedrooms', 1)) if normalized.get('bedrooms') else 1,
+                        'bathrooms': int(normalized.get('bathrooms', 1)) if normalized.get('bathrooms') else 1,
+                        'location': str(normalized.get('location', '')),
+                        'address': str(normalized.get('address', '')),
+                        'area': float(normalized.get('area', 0)) if normalized.get('area') else 0,
                     })
         wb.close()
     except Exception as e:
@@ -643,6 +668,19 @@ async def upload_properties(user_id: str = None, file: UploadFile = File(...)):
     except Exception as exc:
         logging.error(f"Upload error: {str(exc)}")
         raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/properties/template")
+async def get_template():
+    """Get CSV template for property upload."""
+    template = """title,description,type,price,bedrooms,bathrooms,location,address,area
+Departamento 2 amb Palermo,Luminoso con balcón,compra,85000,2,1,Palermo,Borges 1650,65
+Casa 3 amb San Telmo,Con patio,compra,120000,3,2,San Telmo,Defensa 2100,120
+Monoambiente Recoleta,Moderno y equipado,alquiler,1200,1,1,Recoleta,Av. Santa Fe 1200,45"""
+    return {
+        "template": template,
+        "required_columns": ["title", "type", "location"],
+        "optional_columns": ["description", "price", "bedrooms", "bathrooms", "address", "area"]
+    }
 
 @app.get("/health")
 async def health():
