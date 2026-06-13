@@ -63,6 +63,12 @@ class UserOut(BaseModel):
     email: str
     created_at: str
 
+class ChatRequest(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    reply: str
+
 # --- Auth Utils ---
 
 def hash_password(password: str) -> str:
@@ -250,10 +256,45 @@ async def logout(response: Response):
     response.delete_cookie("wapsell_session", path="/")
     return Response(status_code=204)
 
+# --- Chat Endpoints ---
+
+@app.post("/chat/message", response_model=ChatResponse)
+async def chat_message(req: ChatRequest, user_id: str = None, request: Request = None):
+    """Send a message and get a response from the agent.
+
+    For MVP: Returns a mock response. In production, integrate with LLM.
+    """
+    try:
+        # Verify user is authenticated (if provided in query)
+        if user_id:
+            user = get_user_by_id(user_id)
+            if not user:
+                raise HTTPException(status_code=401, detail="User not found")
+
+        # Mock response for MVP — in production, call LLM here
+        user_message = req.message.lower()
+
+        # Simple rule-based responses for demo
+        if "palermo" in user_message:
+            reply = "Tenemos excelentes departamentos en Palermo. ¿Cuál es tu presupuesto?"
+        elif "precio" in user_message or "$" in user_message:
+            reply = "Nuestros precios varían según la ubicación y tamaño. ¿Qué zona te interesa?"
+        elif "dormitorios" in user_message or "dorm" in user_message:
+            reply = "Tenemos opciones de 1, 2, 3 y 4+ dormitorios. ¿Cuántos necesitas?"
+        else:
+            reply = f"Excelente pregunta: '{req.message}'. Te ayudaremos a encontrar el inmueble perfecto."
+
+        return ChatResponse(reply=reply)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""
-    return {"status": "ok"}
+    return {"status": "ok", "service": "wapsell-api"}
 
 if __name__ == "__main__":
     import uvicorn
