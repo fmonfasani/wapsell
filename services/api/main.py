@@ -15,6 +15,10 @@ from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, field_validator
 
+# Hermes/Waseller imports
+from wapsell.client import WapsellClient
+from wapsell.models import Fact, Tenant
+
 try:
     import openpyxl
 except ImportError:
@@ -433,6 +437,42 @@ app = FastAPI()
 # Initialize database
 init_db()
 
+# Initialize Hermes/Wapsell client for RAG
+def init_hermes_client():
+    """Initialize WapsellClient with properties loaded as Facts in Hindsight."""
+    client = WapsellClient()
+
+    # Create a demo tenant
+    demo_tenant = Tenant(
+        id="demo",
+        slug="demo",
+        name="Demo Tenant",
+        plan="pro",
+        created_at=datetime.now(UTC).isoformat()
+    )
+    client.tenants.create(demo_tenant)
+
+    # Load properties as Facts in Hindsight
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, description, type, price, bedrooms, location FROM properties")
+    properties = cursor.fetchall()
+    conn.close()
+
+    for title, description, prop_type, price, bedrooms, location in properties:
+        fact_text = f"{title}. {description}. {bedrooms} dormitorios, {prop_type}, ${price:,.0f}, {location}"
+        fact = Fact(
+            id=secrets.token_urlsafe(12),
+            content=fact_text,
+            tenant_id="demo",
+            created_at=datetime.now(UTC).isoformat()
+        )
+        client.hindsight.add_fact(fact)
+
+    return client
+
+hermes_client = init_hermes_client()
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -558,7 +598,7 @@ async def logout(response: Response):
 
 @app.post("/chat/message", response_model=ChatResponse)
 async def chat_message(req: ChatRequest, user_id: str = None):
-    """Send a message and get a response from the agent with RAG."""
+    """Send a message and get a response from Hermes agent with RAG."""
     try:
         if not user_id:
             raise HTTPException(status_code=401, detail="user_id required")
@@ -570,26 +610,32 @@ async def chat_message(req: ChatRequest, user_id: str = None):
         # Save user message
         save_chat_message(user_id, "user", req.message)
 
-        # Search for relevant properties
-        properties = search_properties(req.message, limit=3)
+        # Use Hermes agent to generate reply with RAG
+        # buyer_id composition: tenant:user_id
+        buyer_id = f"demo:{user_id}"
 
-        # Generate response based on properties found
-        user_message_lower = req.message.lower()
-        reply = ""
-
-        if properties:
-            # Build response with actual property data
-            props_info = []
-            for prop in properties:
-                prop_id, title, desc, prop_type, price, beds, location = prop
-                price_str = f"${price:,.0f}" if prop_type == "compra" else f"${price:,.0f}/mes"
-                props_info.append(f"• {title} ({beds} dorm) en {location} - {price_str}")
-
-            reply = f"Tenemos opciones interesantes para ti:\n\n" + "\n".join(props_info)
-            reply += "\n\n¿Te interesa conocer más detalles de alguno de estos inmuebles?"
-        else:
-            # Fallback response
-            reply = f"Búsqueda: '{req.message}'. En nuestra base de datos tenemos propiedades en compra y alquiler en toda CABA. ¿Qué tipo de inmueble te interesa?"
+        try:
+            # Get agent turn with RAG context and natural language response
+            agent_turn = hermes_client.agent_loop.turn(
+                message=req.message,
+                buyer_id=buyer_id,
+                tenant_id="demo"
+            )
+            reply = agent_turn.reply
+        except Exception as e:
+            logging.warning(f"Hermes agent error: {str(e)}, falling back to search")
+            # Fallback to simple search if agent fails
+            properties = search_properties(req.message, limit=3)
+            if properties:
+                props_info = []
+                for prop in properties:
+                    prop_id, title, desc, prop_type, price, beds, location = prop
+                    price_str = f"${price:,.0f}" if prop_type == "compra" else f"${price:,.0f}/mes"
+                    props_info.append(f"• {title} ({beds} dorm) en {location} - {price_str}")
+                reply = f"Tenemos opciones interesantes para ti:\n\n" + "\n".join(props_info)
+                reply += "\n\n¿Te interesa conocer más detalles de alguno de estos inmuebles?"
+            else:
+                reply = "En nuestra base de datos tenemos propiedades en compra y alquiler en toda CABA. ¿Qué tipo de inmueble te interesa?"
 
         # Save agent response
         save_chat_message(user_id, "agent", reply)
