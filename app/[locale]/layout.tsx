@@ -4,6 +4,7 @@ import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { routing } from "@/i18n/routing";
 import { BRAND } from "@/lib/constants";
+import { Navbar } from "@/components/Navbar";
 import "../globals.css";
 
 // Static rendering for all locales — next-intl needs the locale set per-request
@@ -60,7 +61,10 @@ export default async function LocaleLayout({
   return (
     <html lang={locale === "es" ? "es-AR" : "en"}>
       <body>
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider>
+          <Navbar />
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );
