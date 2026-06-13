@@ -252,15 +252,17 @@ def search_properties(query: str, limit: int = 5) -> list:
     """Search properties by keyword (title, description, location)."""
     conn = get_db()
     cursor = conn.cursor()
-    search_lower = query.lower()
+    search_term = f"%{query}%"
 
-    # First try LIKE search
+    # Use COLLATE NOCASE for case-insensitive search in SQLite
     cursor.execute("""
         SELECT id, title, description, type, price, bedrooms, location
         FROM properties
-        WHERE title LIKE ? OR description LIKE ? OR location LIKE ?
+        WHERE title LIKE ? COLLATE NOCASE
+           OR description LIKE ? COLLATE NOCASE
+           OR location LIKE ? COLLATE NOCASE
         LIMIT ?
-    """, (f"%{search_lower}%", f"%{search_lower}%", f"%{search_lower}%", limit))
+    """, (search_term, search_term, search_term, limit))
 
     results = cursor.fetchall()
 
