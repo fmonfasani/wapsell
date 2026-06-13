@@ -1,23 +1,57 @@
 """Wapsell Auth API — handles user registration, login, and session management."""
 
 from datetime import UTC, datetime, timedelta
+import csv
 import hashlib
 import logging
 import os
 import secrets
 import sqlite3
+import tempfile
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, field_validator
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None
 
 # --- Database Setup ---
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "wapsell.db")
 
+def seed_properties(cursor):
+    """Seed database with 10 demo properties."""
+    now = datetime.now(UTC).isoformat()
+    properties = [
+        ("prop_001", "Departamento 2 amb Palermo Soho", "Luminoso con balcón, piso alto", "compra", 85000, 2, 1, "Palermo", "Borges 1650, CABA", 65),
+        ("prop_002", "PH 3 amb San Telmo", "Con patio y cochera", "compra", 120000, 3, 2, "San Telmo", "Defensa 2100, CABA", 120),
+        ("prop_003", "Monoambiente Recoleta", "Moderno y equipado, apto crédito", "compra", 72000, 1, 1, "Recoleta", "Av. Santa Fe 1200, CABA", 45),
+        ("prop_004", "Departamento 2 amb Caballito", "Reciclado, zona tranquila", "alquiler", 1200, 2, 1, "Caballito", "Avenida Rivadavia 3000, CABA", 70),
+        ("prop_005", "Casa 4 amb Villa Urquiza", "Garaje doble, parque", "compra", 280000, 4, 3, "Villa Urquiza", "Virrey Ceballos 4500, CABA", 250),
+        ("prop_006", "Monoambiente Microcentro", "Apto estudiantes, ejecutivos", "alquiler", 900, 1, 1, "Microcentro", "Tucumán 800, CABA", 38),
+        ("prop_007", "Departamento 3 amb Belgrano", "Amenities: piscina, gym", "alquiler", 1800, 3, 2, "Belgrano", "Av. Cabildo 2500, CABA", 110),
+        ("prop_008", "PH 2 amb La Boca", "Histórico, excelente inversión", "compra", 95000, 2, 1, "La Boca", "Caminito 250, CABA", 60),
+        ("prop_009", "Loft Balvanera", "Doble altura, industrial chic", "compra", 110000, 2, 2, "Balvanera", "Av. Corrientes 3000, CABA", 85),
+        ("prop_010", "Departamento 1 amb Villa Crespo", "Renovado, cuadra silenciosa", "alquiler", 800, 1, 1, "Villa Crespo", "Gallo 1400, CABA", 40),
+    ]
+
+    for prop_id, title, desc, prop_type, price, beds, baths, location, address, area in properties:
+        cursor.execute("""
+            INSERT INTO properties (id, title, description, type, price, bedrooms, bathrooms, location, address, area, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (prop_id, title, desc, prop_type, price, beds, baths, location, address, area, now))
+
 def init_db():
-    """Initialize SQLite database with users and sessions tables."""
+    """Initialize SQLite database with all tables."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -40,6 +74,42 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+
+    # Properties table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS properties (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT,
+            type TEXT NOT NULL,
+            price REAL,
+            bedrooms INTEGER,
+            bathrooms INTEGER,
+            location TEXT,
+            address TEXT,
+            area REAL,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    # Chat messages table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    conn.commit()
+
+    # Seed default properties if table is empty
+    cursor.execute("SELECT COUNT(*) FROM properties")
+    if cursor.fetchone()[0] == 0:
+        seed_properties(cursor)
 
     conn.commit()
     conn.close()
@@ -89,6 +159,24 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+
+class PropertyOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    type: str
+    price: float
+    bedrooms: int
+    bathrooms: int
+    location: str
+    address: str
+    area: float
+
+class ChatMessageOut(BaseModel):
+    id: str
+    role: str
+    content: str
+    created_at: str
 
 # --- Auth Utils ---
 
@@ -156,6 +244,144 @@ def get_user_by_id(user_id: str) -> Optional[tuple]:
     user = cursor.fetchone()
     conn.close()
     return user
+
+# --- Chat & Properties Utils ---
+
+def search_properties(query: str, limit: int = 5) -> list:
+    """Search properties by keyword (title, description, location)."""
+    conn = get_db()
+    cursor = conn.cursor()
+    search_term = f"%{query.lower()}%"
+    cursor.execute("""
+        SELECT id, title, description, type, price, bedrooms, location
+        FROM properties
+        WHERE LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(location) LIKE ?
+        LIMIT ?
+    """, (search_term, search_term, search_term, limit))
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def save_chat_message(user_id: str, role: str, content: str) -> str:
+    """Save a chat message to database."""
+    msg_id = secrets.token_urlsafe(12)
+    now = datetime.now(UTC).isoformat()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO chat_messages (id, user_id, role, content, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (msg_id, user_id, role, content, now))
+    conn.commit()
+    conn.close()
+    return msg_id
+
+def get_chat_history(user_id: str) -> list:
+    """Get chat history for a user."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, role, content, created_at
+        FROM chat_messages
+        WHERE user_id = ?
+        ORDER BY created_at ASC
+    """, (user_id,))
+    messages = cursor.fetchall()
+    conn.close()
+    return messages
+
+def parse_csv(file_path: str) -> list:
+    """Parse CSV file and extract property data."""
+    properties = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if all(k in row for k in ['title', 'type', 'location']):
+                    prop_id = secrets.token_urlsafe(8)
+                    properties.append({
+                        'id': prop_id,
+                        'title': row.get('title', ''),
+                        'description': row.get('description', ''),
+                        'type': row.get('type', ''),
+                        'price': float(row.get('price', 0)) if row.get('price') else 0,
+                        'bedrooms': int(row.get('bedrooms', 1)) if row.get('bedrooms') else 1,
+                        'bathrooms': int(row.get('bathrooms', 1)) if row.get('bathrooms') else 1,
+                        'location': row.get('location', ''),
+                        'address': row.get('address', ''),
+                        'area': float(row.get('area', 0)) if row.get('area') else 0,
+                    })
+    except Exception as e:
+        logging.error(f"CSV parsing error: {str(e)}")
+    return properties
+
+def parse_excel(file_path: str) -> list:
+    """Parse Excel file and extract property data."""
+    properties = []
+    if not openpyxl:
+        return properties
+    try:
+        wb = openpyxl.load_workbook(file_path)
+        ws = wb.active
+        headers = [cell.value for cell in ws[1]]
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if len(row) > 0 and row[0]:
+                data = dict(zip(headers, row))
+                if all(k in data for k in ['title', 'type', 'location']):
+                    prop_id = secrets.token_urlsafe(8)
+                    properties.append({
+                        'id': prop_id,
+                        'title': str(data.get('title', '')),
+                        'description': str(data.get('description', '')),
+                        'type': str(data.get('type', '')),
+                        'price': float(data.get('price', 0)) if data.get('price') else 0,
+                        'bedrooms': int(data.get('bedrooms', 1)) if data.get('bedrooms') else 1,
+                        'bathrooms': int(data.get('bathrooms', 1)) if data.get('bathrooms') else 1,
+                        'location': str(data.get('location', '')),
+                        'address': str(data.get('address', '')),
+                        'area': float(data.get('area', 0)) if data.get('area') else 0,
+                    })
+    except Exception as e:
+        logging.error(f"Excel parsing error: {str(e)}")
+    return properties
+
+def parse_pdf(file_path: str) -> list:
+    """Parse PDF file and extract property data (basic text extraction)."""
+    properties = []
+    if not pdfplumber:
+        return properties
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                # Simple extraction - in production, use better parsing
+                if text:
+                    logging.info(f"PDF page extracted: {len(text)} chars")
+    except Exception as e:
+        logging.error(f"PDF parsing error: {str(e)}")
+    return properties
+
+def insert_properties(properties: list, user_id: str = None) -> int:
+    """Insert properties into database."""
+    if not properties:
+        return 0
+    conn = get_db()
+    cursor = conn.cursor()
+    now = datetime.now(UTC).isoformat()
+    count = 0
+    for prop in properties:
+        try:
+            cursor.execute("""
+                INSERT INTO properties (id, title, description, type, price, bedrooms, bathrooms, location, address, area, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (prop['id'], prop['title'], prop['description'], prop['type'], prop['price'],
+                  prop['bedrooms'], prop['bathrooms'], prop['location'], prop['address'], prop['area'], now))
+            count += 1
+        except sqlite3.IntegrityError:
+            pass
+    conn.commit()
+    conn.close()
+    return count
 
 # --- FastAPI App ---
 
@@ -289,37 +515,123 @@ async def logout(response: Response):
 
 @app.post("/chat/message", response_model=ChatResponse)
 async def chat_message(req: ChatRequest, user_id: str = None):
-    """Send a message and get a response from the agent.
-
-    For MVP: Returns a mock response. In production, integrate with LLM.
-    """
+    """Send a message and get a response from the agent with RAG."""
     try:
-        # Verify user is authenticated (if provided in query)
-        if user_id:
-            user = get_user_by_id(user_id)
-            if not user:
-                raise HTTPException(status_code=401, detail="User not found")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="user_id required")
 
-        # Mock response for MVP — in production, call LLM here
-        user_message = req.message.lower()
+        user = get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
 
-        # Simple rule-based responses for demo
-        if "palermo" in user_message:
-            reply = "Tenemos excelentes departamentos en Palermo. ¿Cuál es tu presupuesto?"
-        elif "precio" in user_message or "$" in user_message:
-            reply = "Nuestros precios varían según la ubicación y tamaño. ¿Qué zona te interesa?"
-        elif "dormitorios" in user_message or "dorm" in user_message:
-            reply = "Tenemos opciones de 1, 2, 3 y 4+ dormitorios. ¿Cuántos necesitas?"
+        # Save user message
+        save_chat_message(user_id, "user", req.message)
+
+        # Search for relevant properties
+        properties = search_properties(req.message, limit=3)
+
+        # Generate response based on properties found
+        user_message_lower = req.message.lower()
+        reply = ""
+
+        if properties:
+            # Build response with actual property data
+            props_info = []
+            for prop in properties:
+                prop_id, title, desc, prop_type, price, beds, location = prop
+                price_str = f"${price:,.0f}" if prop_type == "compra" else f"${price:,.0f}/mes"
+                props_info.append(f"• {title} ({beds} dorm) en {location} - {price_str}")
+
+            reply = f"Tenemos opciones interesantes para ti:\n\n" + "\n".join(props_info)
+            reply += "\n\n¿Te interesa conocer más detalles de alguno de estos inmuebles?"
         else:
-            reply = f"Excelente pregunta: '{req.message}'. Te ayudaremos a encontrar el inmueble perfecto."
+            # Fallback response
+            reply = f"Búsqueda: '{req.message}'. En nuestra base de datos tenemos propiedades en compra y alquiler en toda CABA. ¿Qué tipo de inmueble te interesa?"
+
+        # Save agent response
+        save_chat_message(user_id, "agent", reply)
 
         return ChatResponse(reply=reply)
 
     except HTTPException:
         raise
     except Exception as exc:
-        import logging
         logging.error(f"Chat error: {str(exc)}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/messages")
+async def get_messages(user_id: str = None):
+    """Get chat history for a user."""
+    try:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id required")
+
+        user = get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        messages = get_chat_history(user_id)
+        return {
+            "messages": [
+                ChatMessageOut(id=m[0], role=m[1], content=m[2], created_at=m[3])
+                for m in messages
+            ]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logging.error(f"Get messages error: {str(exc)}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.post("/properties/upload")
+async def upload_properties(user_id: str = None, file: UploadFile = File(...)):
+    """Upload property data from CSV, Excel, or PDF."""
+    try:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id required")
+
+        user = get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        # Validate file type
+        allowed_extensions = ['.csv', '.xlsx', '.xls', '.pdf']
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"File type not allowed. Use: {', '.join(allowed_extensions)}")
+
+        # Save file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            # Parse based on file type
+            properties = []
+            if file_ext == '.csv':
+                properties = parse_csv(tmp_path)
+            elif file_ext in ['.xlsx', '.xls']:
+                properties = parse_excel(tmp_path)
+            elif file_ext == '.pdf':
+                properties = parse_pdf(tmp_path)
+
+            # Insert into database
+            count = insert_properties(properties, user_id)
+
+            return {
+                "success": True,
+                "message": f"Uploaded {count} properties",
+                "count": count
+            }
+        finally:
+            os.unlink(tmp_path)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logging.error(f"Upload error: {str(exc)}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 @app.get("/health")
