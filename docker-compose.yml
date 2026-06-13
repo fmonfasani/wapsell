@@ -11,6 +11,34 @@
 name: wapsell
 
 services:
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    image: wapsell-api:latest
+    container_name: wapsell-api
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - /tmp/wapsell-data:/tmp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
   app:
     build:
       context: .
@@ -23,9 +51,14 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    depends_on:
+      api:
+        condition: service_healthy
     # Bind to localhost ONLY. The host nginx does the public-facing TLS.
     ports:
       - "127.0.0.1:${APP_PORT:-3010}:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
     healthcheck:
       # Hits the Spanish landing — if Next is up and the i18n middleware
       # works, this returns 200. Avoids a separate /api/health route.
