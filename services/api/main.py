@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 import hashlib
+import logging
 import os
 import secrets
 import sqlite3
@@ -287,7 +288,7 @@ async def logout(response: Response):
 # --- Chat Endpoints ---
 
 @app.post("/chat/message", response_model=ChatResponse)
-async def chat_message(req: ChatRequest, user_id: str = None, request: Request = None):
+async def chat_message(req: ChatRequest, user_id: str = None):
     """Send a message and get a response from the agent.
 
     For MVP: Returns a mock response. In production, integrate with LLM.
@@ -317,6 +318,8 @@ async def chat_message(req: ChatRequest, user_id: str = None, request: Request =
     except HTTPException:
         raise
     except Exception as exc:
+        import logging
+        logging.error(f"Chat error: {str(exc)}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 @app.get("/health")
