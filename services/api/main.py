@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, field_validator
 
 # --- Database Setup ---
 
@@ -50,12 +50,32 @@ def get_db():
 # --- Models ---
 
 class RegisterRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str
     name: str
 
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        if not any(c.isupper() for c in v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one digit')
+        return v
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if len(v) < 2:
+            raise ValueError('Name must be at least 2 characters')
+        if len(v) > 100:
+            raise ValueError('Name must be less than 100 characters')
+        return v
+
 class LoginRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
 class UserOut(BaseModel):
@@ -156,7 +176,7 @@ app.add_middleware(
 
 @app.post("/auth/register", response_model=UserOut, status_code=201)
 async def register(req: RegisterRequest, response: Response):
-    """Register a new user."""
+    """Register a new user with validation."""
     try:
         # Hash password
         password_hash = hash_password(req.password)
@@ -191,14 +211,19 @@ async def register(req: RegisterRequest, response: Response):
 
         return UserOut(id=user_id, email=req.email, created_at=now)
 
-    except sqlite3.IntegrityError:
-        raise HTTPException(status_code=409, detail="Email already exists")
+    except sqlite3.IntegrityError as exc:
+        if "UNIQUE constraint failed" in str(exc):
+            raise HTTPException(status_code=409, detail="Este email ya está registrado")
+        raise HTTPException(status_code=400, detail="Error al registrar usuario")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logging.error(f"Registration error: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Error al registrar usuario")
 
 @app.post("/auth/login", response_model=UserOut)
 async def login(req: LoginRequest, response: Response):
-    """Log in a user."""
+    """Log in a user with validation."""
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -210,7 +235,7 @@ async def login(req: LoginRequest, response: Response):
         conn.close()
 
         if not user_row or not verify_password(req.password, user_row[2]):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+            raise HTTPException(status_code=401, detail="Email o contraseña inválidos")
 
         user_id = user_row[0]
 
@@ -232,8 +257,11 @@ async def login(req: LoginRequest, response: Response):
 
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logging.error(f"Login error: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Error al iniciar sesión")
 
 @app.get("/auth/me", response_model=UserOut)
 async def get_me(request: Request):

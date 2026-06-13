@@ -4,6 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+interface FormErrors {
+  name?: string;
+  email?: string;
+  password?: string;
+  password_confirm?: string;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -14,18 +21,49 @@ export default function RegisterPage() {
     password: "",
     password_confirm: "",
   });
+  const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    // Clear field error when user starts typing
+    if (fieldErrors[name as keyof FormErrors]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const errors: FormErrors = {};
+
+    if (!formData.name || formData.name.length < 2) {
+      errors.name = "El nombre debe tener al menos 2 caracteres";
+    }
+
+    if (!formData.email || !formData.email.includes("@")) {
+      errors.email = "Email válido requerido";
+    }
+
+    if (!formData.password || formData.password.length < 8) {
+      errors.password = "La contraseña debe tener al menos 8 caracteres";
+    } else if (!/[A-Z]/.test(formData.password)) {
+      errors.password = "La contraseña debe contener una mayúscula";
+    } else if (!/[0-9]/.test(formData.password)) {
+      errors.password = "La contraseña debe contener un número";
+    }
+
+    if (formData.password !== formData.password_confirm) {
+      errors.password_confirm = "Las contraseñas no coinciden";
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (formData.password !== formData.password_confirm) {
-      setError("Las contraseñas no coinciden");
+    if (!validateForm()) {
       return;
     }
 
@@ -50,7 +88,6 @@ export default function RegisterPage() {
         throw new Error(data.detail || "Error al registrarse");
       }
 
-      // Registro exitoso, redirigir a demo
       router.push("/demo");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrarse");
@@ -84,10 +121,17 @@ export default function RegisterPage() {
                 value={formData.name}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent transition ${
+                  fieldErrors.name
+                    ? "border-red-500 bg-red-50"
+                    : "border-slate-300"
+                }`}
                 placeholder="Tu nombre"
                 disabled={loading}
               />
+              {fieldErrors.name && (
+                <p className="text-sm text-red-600 mt-1">{fieldErrors.name}</p>
+              )}
             </div>
 
             {/* Email */}
@@ -101,10 +145,17 @@ export default function RegisterPage() {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent transition ${
+                  fieldErrors.email
+                    ? "border-red-500 bg-red-50"
+                    : "border-slate-300"
+                }`}
                 placeholder="tu@email.com"
                 disabled={loading}
               />
+              {fieldErrors.email && (
+                <p className="text-sm text-red-600 mt-1">{fieldErrors.email}</p>
+              )}
             </div>
 
             {/* Contraseña */}
@@ -118,10 +169,20 @@ export default function RegisterPage() {
                 value={formData.password}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent transition ${
+                  fieldErrors.password
+                    ? "border-red-500 bg-red-50"
+                    : "border-slate-300"
+                }`}
                 placeholder="••••••••"
                 disabled={loading}
               />
+              {fieldErrors.password && (
+                <p className="text-sm text-red-600 mt-1">{fieldErrors.password}</p>
+              )}
+              <p className="text-xs text-slate-500 mt-2">
+                Mínimo 8 caracteres, 1 mayúscula, 1 número
+              </p>
             </div>
 
             {/* Confirmar Contraseña */}
@@ -135,13 +196,22 @@ export default function RegisterPage() {
                 value={formData.password_confirm}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent transition ${
+                  fieldErrors.password_confirm
+                    ? "border-red-500 bg-red-50"
+                    : "border-slate-300"
+                }`}
                 placeholder="••••••••"
                 disabled={loading}
               />
+              {fieldErrors.password_confirm && (
+                <p className="text-sm text-red-600 mt-1">
+                  {fieldErrors.password_confirm}
+                </p>
+              )}
             </div>
 
-            {/* Error */}
+            {/* Error general */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-3 rounded">
                 {error}
@@ -160,7 +230,10 @@ export default function RegisterPage() {
 
           <div className="mt-6 text-center text-sm text-slate-600">
             ¿Ya tienes cuenta?{" "}
-            <Link href="/auth/login" className="text-brand-600 hover:text-brand-700 font-semibold">
+            <Link
+              href="/auth/login"
+              className="text-brand-600 hover:text-brand-700 font-semibold"
+            >
               Inicia sesión
             </Link>
           </div>
