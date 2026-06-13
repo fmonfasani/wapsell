@@ -110,13 +110,13 @@ export function Navbar() {
               {/* Login/Register links */}
               <Link
                 href="/auth/login"
-                className="text-sm font-medium text-ink hover:text-amber transition-colors"
+                className="text-sm font-semibold text-slate-700 hover:text-amber transition-colors"
               >
                 Inicia sesión
               </Link>
               <Link
                 href="/auth/register"
-                className="btn-primary !h-10 !px-5 text-sm"
+                className="btn-primary !h-10 !px-5 text-sm font-semibold"
               >
                 Regístrate
               </Link>

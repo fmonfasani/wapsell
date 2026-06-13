@@ -321,7 +321,7 @@ def parse_excel(file_path: str) -> list:
     if not openpyxl:
         return properties
     try:
-        wb = openpyxl.load_workbook(file_path)
+        wb = openpyxl.load_workbook(file_path, data_only=True)
         ws = wb.active
         headers = [cell.value for cell in ws[1]]
         for row in ws.iter_rows(min_row=2, values_only=True):
@@ -341,6 +341,7 @@ def parse_excel(file_path: str) -> list:
                         'address': str(data.get('address', '')),
                         'area': float(data.get('area', 0)) if data.get('area') else 0,
                     })
+        wb.close()
     except Exception as e:
         logging.error(f"Excel parsing error: {str(e)}")
     return properties
