@@ -450,7 +450,11 @@ def init_hermes_client():
         plan="pro",
         created_at=datetime.now(UTC).isoformat()
     )
-    client.tenants.create(demo_tenant)
+    try:
+        client.tenants.create("demo", demo_tenant)
+    except Exception:
+        # Tenant might already exist, continue
+        pass
 
     # Load properties as Facts in Hindsight
     conn = sqlite3.connect(DB_PATH)
@@ -464,6 +468,7 @@ def init_hermes_client():
         fact = Fact(
             id=secrets.token_urlsafe(12),
             content=fact_text,
+            source="properties_seed",
             tenant_id="demo",
             created_at=datetime.now(UTC).isoformat()
         )
@@ -611,15 +616,27 @@ async def chat_message(req: ChatRequest, user_id: str = None):
         save_chat_message(user_id, "user", req.message)
 
         # Use Hermes agent to generate reply with RAG
-        # buyer_id composition: tenant:user_id
+        # buyer_id composition: tenant:user_id (from client.py buyer_id_for)
         buyer_id = f"demo:{user_id}"
 
+        # Get demo tenant (created at init)
         try:
-            # Get agent turn with RAG context and natural language response
-            agent_turn = hermes_client.agent_loop.turn(
-                message=req.message,
+            demo_tenant = hermes_client.tenants.repository.find(id="demo")
+        except Exception:
+            # Fallback if tenant lookup fails
+            demo_tenant = Tenant(
+                id="demo",
+                slug="demo",
+                name="Demo Tenant",
+                plan="pro"
+            )
+
+        try:
+            # Call Hermes agent with correct async API: respond(tenant, buyer_id, message)
+            agent_turn = await hermes_client.agent_loop.respond(
+                tenant=demo_tenant,
                 buyer_id=buyer_id,
-                tenant_id="demo"
+                message=req.message
             )
             reply = agent_turn.reply
         except Exception as e:
