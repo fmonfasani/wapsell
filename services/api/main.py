@@ -8,6 +8,7 @@ import os
 import secrets
 import sqlite3
 import tempfile
+import time
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File
@@ -603,12 +604,13 @@ async def upload_properties(user_id: str = None, file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=f"File type not allowed. Use: {', '.join(allowed_extensions)}")
 
         # Save file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
-            content = await file.read()
-            tmp.write(content)
-            tmp_path = tmp.name
-
+        tmp_path = None
         try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
+                content = await file.read()
+                tmp.write(content)
+                tmp_path = tmp.name
+
             # Parse based on file type
             properties = []
             if file_ext == '.csv':
@@ -627,7 +629,14 @@ async def upload_properties(user_id: str = None, file: UploadFile = File(...)):
                 "count": count
             }
         finally:
-            os.unlink(tmp_path)
+            # Clean up temp file safely
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    import time
+                    time.sleep(0.1)  # Small delay to ensure file is released
+                    os.unlink(tmp_path)
+                except Exception as e:
+                    logging.warning(f"Could not delete temp file {tmp_path}: {str(e)}")
 
     except HTTPException:
         raise
