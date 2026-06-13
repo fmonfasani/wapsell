@@ -252,14 +252,28 @@ def search_properties(query: str, limit: int = 5) -> list:
     """Search properties by keyword (title, description, location)."""
     conn = get_db()
     cursor = conn.cursor()
-    search_term = f"%{query.lower()}%"
+    search_lower = query.lower()
+
+    # First try LIKE search
     cursor.execute("""
         SELECT id, title, description, type, price, bedrooms, location
         FROM properties
-        WHERE LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(location) LIKE ?
+        WHERE title LIKE ? OR description LIKE ? OR location LIKE ?
         LIMIT ?
-    """, (search_term, search_term, search_term, limit))
+    """, (f"%{search_lower}%", f"%{search_lower}%", f"%{search_lower}%", limit))
+
     results = cursor.fetchall()
+
+    # If no results, return random properties as fallback
+    if not results:
+        cursor.execute("""
+            SELECT id, title, description, type, price, bedrooms, location
+            FROM properties
+            ORDER BY RANDOM()
+            LIMIT ?
+        """, (limit,))
+        results = cursor.fetchall()
+
     conn.close()
     return results
 
@@ -668,6 +682,28 @@ async def upload_properties(user_id: str = None, file: UploadFile = File(...)):
     except Exception as exc:
         logging.error(f"Upload error: {str(exc)}")
         raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/properties")
+async def list_properties():
+    """List all properties (debug endpoint)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM properties")
+        count = cursor.fetchone()[0]
+        cursor.execute("SELECT id, title, location, type FROM properties LIMIT 20")
+        props = cursor.fetchall()
+        conn.close()
+        return {
+            "total": count,
+            "sample": [
+                {"id": p[0], "title": p[1], "location": p[2], "type": p[3]}
+                for p in props
+            ]
+        }
+    except Exception as e:
+        logging.error(f"Error listing properties: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/properties/template")
 async def get_template():
