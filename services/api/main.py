@@ -450,7 +450,7 @@ def init_hermes_client():
     api_key = os.getenv("OPENROUTER_API_KEY")
     model = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 
-    llm = OpenRouterLLM(api_key=api_key, model=model)
+    llm = OpenRouterLLM(api_key=api_key)
 
     # Create client with custom LLM
     client = WapsellClient(llm=llm)
