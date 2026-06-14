@@ -1,22 +1,22 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useRequireAuth } from "@/lib/useAuth";
+import { useRouter, useParams } from "next/navigation";
 
+// The demo is now an open, login-free WhatsApp-style chat. This entry point
+// just forwards to it (keeping the locale prefix).
 export default function DemoPage() {
   const router = useRouter();
-  const { user, loading } = useRequireAuth();
+  const params = useParams();
+  const locale = (params?.locale as string) || "es";
 
   useEffect(() => {
-    if (!loading && user) {
-      router.push("/demo/chat");
-    }
-  }, [user, loading, router]);
+    router.replace(`/${locale}/demo/chat`);
+  }, [router, locale]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-      <p className="text-slate-600">Cargando...</p>
+    <div className="flex min-h-screen items-center justify-center bg-[#efeae2]">
+      <p className="text-slate-600">Abriendo el chat…</p>
     </div>
   );
 }

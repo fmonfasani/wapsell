@@ -1,10 +1,14 @@
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import Link from "next/link";
 import { BRAND, buildWaLink } from "@/lib/constants";
 
 export function FinalCTA() {
   const t = useTranslations();
+  const locale = useLocale();
   const greeting = t("wa.greeting", { brand: BRAND.name });
   const waLink = buildWaLink(greeting);
+  const demoCta = locale === "en" ? "Try the live demo" : "Probar el demo en vivo";
+  const waCta = locale === "en" ? "Or chat on WhatsApp" : "O hablá por WhatsApp";
 
   return (
     <section className="bg-cream py-28 md:py-40">
@@ -14,13 +18,16 @@ export function FinalCTA() {
         </h2>
 
         <div className="mt-10 flex flex-col items-center gap-4">
+          <Link href={`/${locale}/demo/chat`} className="btn-primary text-base">
+            {demoCta}
+          </Link>
           <a
             href={waLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-primary text-base"
+            className="text-sm font-medium text-ink-muted underline underline-offset-4 hover:text-ink"
           >
-            {t("finalCTA.cta", { brand: BRAND.name })}
+            {waCta}
           </a>
 
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-ink-muted">

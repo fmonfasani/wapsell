@@ -1,10 +1,14 @@
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import Link from "next/link";
 import { BRAND, buildWaLink } from "@/lib/constants";
 
 export function Hero() {
   const t = useTranslations();
+  const locale = useLocale();
   const greeting = t("wa.greeting", { brand: BRAND.name });
   const waLink = buildWaLink(greeting);
+  const demoCta = locale === "en" ? "Try the live demo" : "Probar el demo en vivo";
+  const waCta = locale === "en" ? "Or chat with us on WhatsApp" : "O hablá con nosotros por WhatsApp";
 
   return (
     <section className="section flex flex-col items-center text-center py-24 md:py-36">
@@ -19,13 +23,16 @@ export function Hero() {
       </p>
 
       <div className="mt-10 flex flex-col items-center gap-3">
+        <Link href={`/${locale}/demo/chat`} className="btn-primary text-base">
+          {demoCta}
+        </Link>
         <a
           href={waLink}
           target="_blank"
           rel="noopener noreferrer"
-          className="btn-primary text-base"
+          className="text-sm font-medium text-ink-muted underline underline-offset-4 hover:text-ink"
         >
-          {t("hero.cta", { brand: BRAND.name })}
+          {waCta}
         </a>
         <p className="text-sm text-ink-muted">{t("hero.trust")}</p>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { useAuth } from "@/lib/useAuth";
 import { BRAND } from "@/lib/constants";
@@ -11,6 +11,8 @@ export function Navbar() {
   const { user, logout, loading } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const t = useTranslations();
+  const locale = useLocale();
+  const demoCta = locale === "en" ? "Try the demo" : "Probar demo";
 
   return (
     <header className="sticky top-0 z-50 bg-cream/80 backdrop-blur border-b border-cream-300">
@@ -106,21 +108,13 @@ export function Navbar() {
               </div>
             </>
           ) : (
-            <>
-              {/* Login/Register links */}
-              <Link
-                href="/auth/login"
-                className="text-sm font-semibold text-slate-700 hover:text-amber transition-colors"
-              >
-                Inicia sesión
-              </Link>
-              <Link
-                href="/auth/register"
-                className="btn-primary !h-10 !px-5 text-sm font-semibold"
-              >
-                Regístrate
-              </Link>
-            </>
+            /* Login-free demo: the primary nav CTA drives to the live chat. */
+            <Link
+              href="/demo/chat"
+              className="btn-primary !h-10 !px-5 text-sm font-semibold"
+            >
+              {demoCta}
+            </Link>
           )}
         </div>
       </nav>
