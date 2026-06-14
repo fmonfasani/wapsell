@@ -209,7 +209,7 @@ export default function DemoChatPage() {
   const submitContact = async (name: string, email: string, phone: string) => {
     if (!demoId) return;
     try {
-      await fetch(`${API_BASE}/demo/contact?demo_id=${demoId}`, {
+      await fetch(`${API_BASE}/demo/contact?demo_id=${demoId}&lang=${locale}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, phone }),

@@ -9,6 +9,8 @@ import secrets
 import sqlite3
 import tempfile
 import time
+import json
+import urllib.request
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -211,16 +213,46 @@ def init_db():
         )
     """)
 
-    # Bridge — the ONLY place a demo lead and an app user meet.
+    # Deals (Capa 2) — a pre-deal (lead) becomes a DEAL once its email/phone is
+    # validated. Structured, pipeline-staged. Never shares tables with Capa 1.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_deals (
+            id TEXT PRIMARY KEY,
+            lead_id TEXT,
+            name TEXT,
+            email TEXT,
+            phone TEXT,
+            company TEXT,
+            stage TEXT DEFAULT 'new',
+            persona TEXT,
+            source TEXT,
+            created_at TEXT NOT NULL,
+            validated_at TEXT
+        )
+    """)
+
+    # Bridge — the ONLY place a demo lead and its Capa-2 entity (deal/user) meet.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS conversions (
             id TEXT PRIMARY KEY,
             demo_lead_id TEXT NOT NULL,
-            app_user_id TEXT NOT NULL,
+            app_deal_id TEXT,
+            app_user_id TEXT,
             matched_by TEXT,
             created_at TEXT NOT NULL
         )
     """)
+
+    # --- lightweight migrations (add columns if missing on existing DBs) ---
+    def _add_col(table, col, ddl):
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+    _add_col("leads", "verify_token", "TEXT")
+    _add_col("leads", "email_verified", "INTEGER DEFAULT 0")
+    _add_col("leads", "verified_at", "TEXT")
+    _add_col("conversions", "app_deal_id", "TEXT")
 
     conn.commit()
 
@@ -235,6 +267,63 @@ def init_db():
 def get_db():
     """Get database connection."""
     return sqlite3.connect(DB_PATH)
+
+# --- Email (Resend) ---
+# Activates automatically once RESEND_API_KEY is set in the env. Until then,
+# /demo/contact returns the verify_url so the flow is testable end-to-end.
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM = os.getenv("RESEND_FROM", "Wapsell <onboarding@resend.dev>")
+PUBLIC_API_URL = os.getenv("WAPSELL_PUBLIC_API_URL", "https://api.wapsell.com")
+
+def send_verification_email(to_email: str, verify_url: str, lang: str = "es") -> bool:
+    """Send the email-verification link via Resend. Returns True on success."""
+    if not RESEND_API_KEY:
+        logging.warning("[EMAIL] RESEND_API_KEY not set; skipping send to %s", to_email)
+        return False
+    if lang == "en":
+        subject = "Verify your email · Wapsell"
+        html = (
+            f"<div style='font-family:sans-serif;max-width:480px;margin:auto'>"
+            f"<h2>One last step ✅</h2>"
+            f"<p>Confirm your email to activate your Wapsell quote and we'll reach "
+            f"out on WhatsApp.</p>"
+            f"<p><a href='{verify_url}' style='background:#25D366;color:#fff;"
+            f"padding:12px 20px;border-radius:8px;text-decoration:none;"
+            f"display:inline-block'>Verify my email</a></p>"
+            f"<p style='color:#888;font-size:12px'>If the button doesn't work: {verify_url}</p>"
+            f"</div>"
+        )
+    else:
+        subject = "Verificá tu email · Wapsell"
+        html = (
+            f"<div style='font-family:sans-serif;max-width:480px;margin:auto'>"
+            f"<h2>Un último paso ✅</h2>"
+            f"<p>Confirmá tu email para activar tu cotización de Wapsell y te "
+            f"contactamos por WhatsApp.</p>"
+            f"<p><a href='{verify_url}' style='background:#25D366;color:#fff;"
+            f"padding:12px 20px;border-radius:8px;text-decoration:none;"
+            f"display:inline-block'>Verificar mi email</a></p>"
+            f"<p style='color:#888;font-size:12px'>Si el botón no funciona: {verify_url}</p>"
+            f"</div>"
+        )
+    payload = json.dumps({
+        "from": RESEND_FROM, "to": [to_email], "subject": subject, "html": html,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.resend.com/emails", data=payload, method="POST",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            ok = r.status in (200, 201)
+            logging.info("[EMAIL] verification sent to %s (status %s)", to_email, r.status)
+            return ok
+    except Exception as e:
+        logging.error("[EMAIL] send failed for %s: %s", to_email, e)
+        return False
 
 # --- Models ---
 
@@ -510,6 +599,69 @@ def link_conversion(app_user_id: str, email: str = "", phone: str = "") -> Optio
     conn.commit()
     conn.close()
     return bridge
+
+def get_deal(deal_id: str) -> Optional[dict]:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT id, lead_id, name, email, phone, company, stage, persona,
+                  source, created_at, validated_at
+           FROM app_deals WHERE id = ?""",
+        (deal_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    cols = ["id", "lead_id", "name", "email", "phone", "company", "stage",
+            "persona", "source", "created_at", "validated_at"]
+    return dict(zip(cols, row))
+
+def set_verify_token(lead_id: str, token: str):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE leads SET verify_token = ?, email_verified = 0 WHERE id = ?",
+        (token, lead_id),
+    )
+    conn.commit()
+    conn.close()
+
+def promote_lead_to_deal(lead_id: str) -> Optional[dict]:
+    """Promote a validated pre-deal (lead) to a DEAL in Capa 2 + write the bridge.
+
+    Idempotent: a lead already promoted returns its existing deal.
+    """
+    lead = get_lead(lead_id)
+    if not lead:
+        return None
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM app_deals WHERE lead_id = ?", (lead_id,))
+    existing = cursor.fetchone()
+    if existing:
+        conn.close()
+        return get_deal(existing[0])
+
+    deal_id = secrets.token_urlsafe(12)
+    now = datetime.now(UTC).isoformat()
+    cursor.execute(
+        """INSERT INTO app_deals
+           (id, lead_id, name, email, phone, company, stage, persona, source, created_at, validated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'new', ?, ?, ?, ?)""",
+        (deal_id, lead_id, lead.get("name"), lead.get("email"), lead.get("phone"),
+         lead.get("company"), lead.get("detected_persona"), lead.get("source"), now, now),
+    )
+    # Bridge row: the ONLY link between Capa 1 (lead) and Capa 2 (deal).
+    cursor.execute(
+        """INSERT INTO conversions (id, demo_lead_id, app_deal_id, app_user_id, matched_by, created_at)
+           VALUES (?, ?, ?, ?, 'email', ?)""",
+        (secrets.token_urlsafe(12), lead_id, deal_id, "", now),
+    )
+    conn.commit()
+    conn.close()
+    logging.info("[DEAL] promoted lead %s -> deal %s", lead_id, deal_id)
+    return get_deal(deal_id)
 
 # --- Chat & Properties Utils ---
 
@@ -1122,8 +1274,11 @@ async def demo_session():
         raise HTTPException(status_code=500, detail="Could not start demo session")
 
 @app.post("/demo/contact")
-async def demo_contact(req: ContactRequest, demo_id: str = None):
-    """Attach contact info to a demo lead (the capture step)."""
+async def demo_contact(req: ContactRequest, demo_id: str = None, lang: str = "es"):
+    """Capture a lead's contact + send the email-verification link.
+
+    On verification (GET /demo/verify) the lead is promoted to a Capa-2 deal.
+    """
     try:
         if not demo_id:
             raise HTTPException(status_code=400, detail="demo_id required")
@@ -1136,13 +1291,69 @@ async def demo_contact(req: ContactRequest, demo_id: str = None):
         )
         if lead is None:
             raise HTTPException(status_code=404, detail="Lead not found")
-        logging.info(f"[LEAD] captured {demo_id} <{req.email}> persona={lead.get('detected_persona')}")
-        return {"status": "captured", "lead_id": demo_id}
+
+        # Generate the verification token + send the email.
+        token = secrets.token_urlsafe(24)
+        set_verify_token(demo_id, token)
+        verify_url = f"{PUBLIC_API_URL}/demo/verify?token={token}"
+        sent = send_verification_email(str(req.email), verify_url, lang)
+        logging.info(f"[LEAD] captured {demo_id} <{req.email}> email_sent={sent}")
+
+        resp = {"status": "captured", "lead_id": demo_id, "email_sent": sent}
+        # Dev fallback: until RESEND_API_KEY is set, expose the link so the flow
+        # is testable end-to-end (no email provider yet).
+        if not sent:
+            resp["verify_url"] = verify_url
+        return resp
     except HTTPException:
         raise
     except Exception as exc:
         logging.error(f"Demo contact error: {str(exc)}")
         raise HTTPException(status_code=500, detail="Could not save contact")
+
+@app.get("/demo/verify")
+async def demo_verify(token: str = None):
+    """Validate a lead's email and promote it to a Capa-2 deal. Clicked from email."""
+    def page(title: str, body: str, ok: bool = True):
+        color = "#25D366" if ok else "#e02424"
+        html = (
+            f"<!doctype html><html><head><meta charset='utf-8'>"
+            f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            f"<title>{title}</title></head>"
+            f"<body style='font-family:sans-serif;background:#efeae2;margin:0'>"
+            f"<div style='max-width:460px;margin:12vh auto;background:#fff;border-radius:16px;"
+            f"padding:32px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.08)'>"
+            f"<div style='font-size:44px'>{'✅' if ok else '⚠️'}</div>"
+            f"<h2 style='color:{color}'>{title}</h2><p style='color:#444'>{body}</p>"
+            f"<a href='https://wapsell.com' style='color:#008069'>← wapsell.com</a>"
+            f"</div></body></html>"
+        )
+        return Response(content=html, media_type="text/html",
+                        status_code=200 if ok else 404)
+
+    if not token:
+        return page("Link inválido", "Falta el token de verificación.", ok=False)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM leads WHERE verify_token = ?", (token,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return page("Link inválido o vencido", "No encontramos esa verificación.", ok=False)
+    lead_id = row[0]
+    now = datetime.now(UTC).isoformat()
+    cursor.execute(
+        "UPDATE leads SET email_verified = 1, verified_at = ? WHERE id = ?",
+        (now, lead_id),
+    )
+    conn.commit()
+    conn.close()
+    deal = promote_lead_to_deal(lead_id)
+    logging.info(f"[VERIFY] lead {lead_id} verified -> deal {deal.get('id') if deal else None}")
+    return page(
+        "¡Email verificado! 🎉",
+        "Tu cotización quedó activa y te vamos a contactar por WhatsApp. ¡Gracias!",
+    )
 
 def _require_admin(token: Optional[str]):
     """Guard for sales-only endpoints. Set WAPSELL_ADMIN_TOKEN in the env."""
@@ -1218,6 +1429,7 @@ async def app_overview(x_admin_token: Optional[str] = Header(None)):
             "personas_tracked": count("buyer_profiles"),
         },
         "capa2_app": {
+            "deals": count("app_deals"),
             "users": count("app_users"),
             "accounts": count("app_accounts"),
             "subscriptions": count("app_subscriptions"),
@@ -1228,6 +1440,23 @@ async def app_overview(x_admin_token: Optional[str] = Header(None)):
     }
     conn.close()
     return overview
+
+@app.get("/app/deals")
+async def list_deals(x_admin_token: Optional[str] = Header(None)):
+    """List Capa-2 deals (validated leads). Sales-only (X-Admin-Token)."""
+    _require_admin(x_admin_token)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT id, lead_id, name, email, phone, company, stage, persona,
+                  source, created_at, validated_at
+           FROM app_deals ORDER BY created_at DESC"""
+    )
+    cols = ["id", "lead_id", "name", "email", "phone", "company", "stage",
+            "persona", "source", "created_at", "validated_at"]
+    deals = [dict(zip(cols, row)) for row in cursor.fetchall()]
+    conn.close()
+    return {"total": len(deals), "deals": deals}
 
 # --- Pricing / Auto-quote Endpoints (public) ---
 
