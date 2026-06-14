@@ -10,6 +10,11 @@
 
 name: wapsell
 
+# Load environment variables from .env file
+# On the VPS, create .env with OPENROUTER_API_KEY and OPENROUTER_MODEL
+env_file:
+  - .env.production
+
 services:
   api:
     build:
@@ -25,6 +30,8 @@ services:
         max-file: "5"
     ports:
       - "127.0.0.1:8500:8000"
+    env_file:
+      - .env.production
     volumes:
       - /tmp/wapsell-data:/tmp
       - wapsell-db:/app
