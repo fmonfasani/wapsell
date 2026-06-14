@@ -16,6 +16,11 @@ WORKDIR /build
 COPY package.json package-lock.json* ./
 RUN npm install --no-audit --no-fund
 
+# Public API URL must be present at BUILD time — Next.js inlines NEXT_PUBLIC_*
+# into the client bundle during `next build`. Passed from docker-compose build.args.
+ARG NEXT_PUBLIC_API_URL=https://api.wapsell.com
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 # Copy source and build. `output: "standalone"` (set in next.config.js) emits
 # a self-contained .next/standalone/ tree that runs without node_modules.
 COPY . .

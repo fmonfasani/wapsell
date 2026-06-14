@@ -3,7 +3,13 @@ node_modules
 out
 dist
 .env*.local
+.env
+.env.production
 .vercel
+# Runtime SQLite + logs (the container uses a data volume, not the repo file)
+services/api/*.db
+services/api/*.log
+services/api/__pycache__/
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store

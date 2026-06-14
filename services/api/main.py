@@ -12,7 +12,7 @@ import time
 from typing import Optional
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, field_validator
 
@@ -52,7 +52,10 @@ except ImportError:
 
 # --- Database Setup ---
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "wapsell.db")
+# DB path is configurable so the container can point it at a dedicated data
+# volume (/data/wapsell.db) — keeps the SQLite file persistent across rebuilds
+# without a volume shadowing the app code. Defaults to local file for dev.
+DB_PATH = os.getenv("WAPSELL_DB_PATH", os.path.join(os.path.dirname(__file__), "wapsell.db"))
 
 def seed_properties(cursor):
     """Seed database with 10 demo properties."""
@@ -130,6 +133,27 @@ def init_db():
         )
     """)
 
+    # Leads table — the demo funnel identity. A visitor gets an anonymous lead
+    # on first message; once they leave contact info, status flips to 'captured'.
+    # Persona + message_count are persisted here for the sales team.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS leads (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            email TEXT,
+            phone TEXT,
+            company TEXT,
+            status TEXT NOT NULL DEFAULT 'anonymous',
+            detected_persona TEXT,
+            persona_confidence REAL DEFAULT 0.0,
+            message_count INTEGER DEFAULT 0,
+            source TEXT,
+            created_at TEXT NOT NULL,
+            captured_at TEXT,
+            last_active TEXT
+        )
+    """)
+
     conn.commit()
 
     # Seed default properties if table is empty
@@ -185,6 +209,17 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    persona: Optional[str] = None
+    should_capture: bool = False
+
+class ContactRequest(BaseModel):
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    company: Optional[str] = None
+
+class DemoSessionOut(BaseModel):
+    demo_id: str
 
 class PropertyOut(BaseModel):
     id: str
@@ -270,6 +305,99 @@ def get_user_by_id(user_id: str) -> Optional[tuple]:
     user = cursor.fetchone()
     conn.close()
     return user
+
+# --- Lead (demo funnel) Utils ---
+
+def create_lead(source: str = "demo") -> str:
+    """Create an anonymous lead and return its id (used as the demo identity)."""
+    lead_id = secrets.token_urlsafe(16)
+    now = datetime.now(UTC).isoformat()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO leads (id, status, source, created_at, last_active)
+           VALUES (?, 'anonymous', ?, ?, ?)""",
+        (lead_id, source, now, now),
+    )
+    conn.commit()
+    conn.close()
+    return lead_id
+
+def get_lead(lead_id: str) -> Optional[dict]:
+    """Return a lead row as a dict, or None."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT id, name, email, phone, company, status, detected_persona,
+                  persona_confidence, message_count, source, created_at,
+                  captured_at, last_active
+           FROM leads WHERE id = ?""",
+        (lead_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    cols = ["id", "name", "email", "phone", "company", "status",
+            "detected_persona", "persona_confidence", "message_count",
+            "source", "created_at", "captured_at", "last_active"]
+    return dict(zip(cols, row))
+
+def touch_lead(lead_id: str, persona: str = None, confidence: float = None) -> Optional[dict]:
+    """Bump a lead's message_count / last_active (and persona) on each message.
+
+    Returns the updated lead dict (or None if it isn't a lead).
+    """
+    lead = get_lead(lead_id)
+    if not lead:
+        return None
+    now = datetime.now(UTC).isoformat()
+    new_count = (lead["message_count"] or 0) + 1
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """UPDATE leads
+           SET message_count = ?, last_active = ?,
+               detected_persona = COALESCE(?, detected_persona),
+               persona_confidence = COALESCE(?, persona_confidence)
+           WHERE id = ?""",
+        (new_count, now, persona, confidence, lead_id),
+    )
+    conn.commit()
+    conn.close()
+    lead["message_count"] = new_count
+    if persona is not None:
+        lead["detected_persona"] = persona
+    if confidence is not None:
+        lead["persona_confidence"] = confidence
+    return lead
+
+def capture_lead(lead_id: str, name: str, email: str, phone: str, company: str) -> Optional[dict]:
+    """Attach contact info to a lead and flip status to 'captured'."""
+    lead = get_lead(lead_id)
+    if not lead:
+        return None
+    now = datetime.now(UTC).isoformat()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """UPDATE leads
+           SET name = ?, email = ?, phone = ?, company = ?,
+               status = 'captured',
+               captured_at = COALESCE(captured_at, ?),
+               last_active = ?
+           WHERE id = ?""",
+        (name, email, phone, company, now, now, lead_id),
+    )
+    conn.commit()
+    conn.close()
+    return get_lead(lead_id)
+
+def get_identity(identity_id: str) -> bool:
+    """True if the id belongs to a real user OR a demo lead."""
+    if get_user_by_id(identity_id):
+        return True
+    return get_lead(identity_id) is not None
 
 # --- Chat & Properties Utils ---
 
@@ -581,11 +709,17 @@ hermes_client = init_hermes_client()
 # Initialize Buyer Profile Manager for adaptive personas and learning
 buyer_profile_manager = BuyerProfileManager(db_path=DB_PATH)
 
-# CORS middleware
+# CORS middleware. The demo uses lead-based identity (user_id as query param),
+# NOT cookies — so we don't need credentialed CORS, and we can list explicit
+# origins. (allow_origins=["*"] + allow_credentials=True is rejected by browsers.)
+CORS_ORIGINS = os.getenv(
+    "WAPSELL_CORS_ORIGINS",
+    "https://wapsell.com,https://www.wapsell.com,http://localhost:3000",
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for now
-    allow_credentials=True,
+    allow_origins=[o.strip() for o in CORS_ORIGINS if o.strip()],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -711,9 +845,9 @@ async def chat_message(req: ChatRequest, user_id: str = None):
         if not user_id:
             raise HTTPException(status_code=401, detail="user_id required")
 
-        user = get_user_by_id(user_id)
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
+        # Identity can be a registered user OR a demo lead.
+        if not get_identity(user_id):
+            raise HTTPException(status_code=401, detail="Unknown identity")
 
         # Save user message
         save_chat_message(user_id, "user", req.message)
@@ -785,13 +919,24 @@ async def chat_message(req: ChatRequest, user_id: str = None):
         # Save agent response
         save_chat_message(user_id, "agent", reply)
 
+        # If this identity is a demo lead, persist persona + bump message_count.
+        # Ask the UI to show the contact-capture card once the lead is warm
+        # (3rd message) and still anonymous.
+        should_capture = False
+        lead = touch_lead(user_id, persona=persona.value, confidence=confidence)
+        if lead is not None:
+            should_capture = (
+                lead.get("status") == "anonymous"
+                and (lead.get("message_count") or 0) >= 3
+            )
+
         # Log persona insights
         persona_stats = buyer_profile_manager.get_persona_stats(persona)
         if persona_stats.get("buyer_count", 0) > 0:
             logging.info(f"[PERSONA_STATS] {persona.value}: "
                         f"{persona_stats.get('conversion_rate', 0):.1%} conversion rate")
 
-        return ChatResponse(reply=reply)
+        return ChatResponse(reply=reply, persona=persona.value, should_capture=should_capture)
 
     except HTTPException:
         raise
@@ -806,9 +951,9 @@ async def get_messages(user_id: str = None):
         if not user_id:
             raise HTTPException(status_code=400, detail="user_id required")
 
-        user = get_user_by_id(user_id)
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
+        # Accept both registered users and demo leads.
+        if not get_identity(user_id):
+            raise HTTPException(status_code=401, detail="Unknown identity")
 
         messages = get_chat_history(user_id)
         return {
@@ -823,6 +968,97 @@ async def get_messages(user_id: str = None):
     except Exception as exc:
         logging.error(f"Get messages error: {str(exc)}")
         raise HTTPException(status_code=500, detail=str(exc))
+
+# --- Demo Funnel (Leads) Endpoints ---
+
+ADMIN_TOKEN = os.getenv("WAPSELL_ADMIN_TOKEN", "")
+
+@app.post("/demo/session", response_model=DemoSessionOut, status_code=201)
+async def demo_session():
+    """Create an anonymous lead for a new demo visitor. No login required."""
+    try:
+        demo_id = create_lead(source="demo")
+        logging.info(f"[LEAD] new anonymous session {demo_id}")
+        return DemoSessionOut(demo_id=demo_id)
+    except Exception as exc:
+        logging.error(f"Demo session error: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Could not start demo session")
+
+@app.post("/demo/contact")
+async def demo_contact(req: ContactRequest, demo_id: str = None):
+    """Attach contact info to a demo lead (the capture step)."""
+    try:
+        if not demo_id:
+            raise HTTPException(status_code=400, detail="demo_id required")
+        lead = capture_lead(
+            demo_id,
+            name=req.name,
+            email=str(req.email),
+            phone=req.phone or "",
+            company=req.company or "",
+        )
+        if lead is None:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        logging.info(f"[LEAD] captured {demo_id} <{req.email}> persona={lead.get('detected_persona')}")
+        return {"status": "captured", "lead_id": demo_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logging.error(f"Demo contact error: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Could not save contact")
+
+def _require_admin(token: Optional[str]):
+    """Guard for sales-only endpoints. Set WAPSELL_ADMIN_TOKEN in the env."""
+    if not ADMIN_TOKEN or token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Admin token required")
+
+@app.get("/demo/leads")
+async def list_leads(x_admin_token: Optional[str] = Header(None)):
+    """List all leads + summary metrics. Sales-only (X-Admin-Token header)."""
+    _require_admin(x_admin_token)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT id, name, email, phone, company, status, detected_persona,
+                  persona_confidence, message_count, source, created_at,
+                  captured_at, last_active
+           FROM leads ORDER BY last_active DESC"""
+    )
+    cols = ["id", "name", "email", "phone", "company", "status",
+            "detected_persona", "persona_confidence", "message_count",
+            "source", "created_at", "captured_at", "last_active"]
+    leads = [dict(zip(cols, row)) for row in cursor.fetchall()]
+    conn.close()
+
+    captured = [l for l in leads if l["status"] == "captured"]
+    by_persona: dict = {}
+    for l in leads:
+        p = l.get("detected_persona") or "unknown"
+        by_persona[p] = by_persona.get(p, 0) + 1
+
+    return {
+        "total": len(leads),
+        "captured": len(captured),
+        "anonymous": len(leads) - len(captured),
+        "by_persona": by_persona,
+        "leads": leads,
+    }
+
+@app.get("/demo/leads/{lead_id}/transcript")
+async def lead_transcript(lead_id: str, x_admin_token: Optional[str] = Header(None)):
+    """Full chat transcript for a lead. Sales-only (X-Admin-Token header)."""
+    _require_admin(x_admin_token)
+    lead = get_lead(lead_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    messages = get_chat_history(lead_id)
+    return {
+        "lead": lead,
+        "messages": [
+            ChatMessageOut(id=m[0], role=m[1], content=m[2], created_at=m[3])
+            for m in messages
+        ],
+    }
 
 # --- Persona Analytics Endpoints ---
 

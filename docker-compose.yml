@@ -24,18 +24,25 @@ services:
         max-size: "10m"
         max-file: "5"
     ports:
-      - "127.0.0.1:8000:8000"
+      # nginx api.wapsell.com proxies to 127.0.0.1:8500
+      - "127.0.0.1:8500:8000"
     env_file:
       - .env.production
+    environment:
+      # DB lives on a dedicated data volume so rebuilds never shadow /app code.
+      WAPSELL_DB_PATH: /data/wapsell.db
     volumes:
       - /tmp/wapsell-data:/tmp
-      - wapsell-db:/app
+      - wapsell-db:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # The image has no curl; use python's urllib instead.
+      test:
+        - "CMD-SHELL"
+        - "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 5
+      start_period: 15s
     deploy:
       resources:
         limits:
@@ -46,6 +53,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Next.js inlines NEXT_PUBLIC_* at build time — must be the public API URL.
+        NEXT_PUBLIC_API_URL: "https://api.wapsell.com"
     image: wapsell-app:latest
     container_name: wapsell-app
     restart: always
@@ -60,8 +70,6 @@ services:
     # Bind to localhost ONLY. The host nginx does the public-facing TLS.
     ports:
       - "127.0.0.1:${APP_PORT:-3010}:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: "http://localhost:8000"
     healthcheck:
       # Hits the Spanish landing — if Next is up and the i18n middleware
       # works, this returns 200. Avoids a separate /api/health route.
