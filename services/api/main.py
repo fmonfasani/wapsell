@@ -19,10 +19,26 @@ from pydantic import BaseModel, EmailStr, field_validator
 # Load environment variables
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('api.log'),
+        logging.StreamHandler()
+    ]
+)
+
 # Hermes/Waseller imports
 from wapsell.client import WapsellClient
 from wapsell.models import Fact, Tenant
 from wapsell.llm.port import OpenRouterLLM
+
+# Buyer Persona & Adaptive Response System
+from buyer_personas import (
+    PersonaDetector, ResponseTemplateGenerator, PersonaType, PersonaInsights
+)
+from buyer_profile_manager import BuyerProfileManager
 
 try:
     import openpyxl
@@ -259,21 +275,48 @@ def get_user_by_id(user_id: str) -> Optional[tuple]:
 
 def search_properties(query: str, limit: int = 5) -> list:
     """Search properties by keyword (title, description, location)."""
+    print(f"[SEARCH] query='{query}', limit={limit}")  # Debug
     conn = get_db()
     cursor = conn.cursor()
-    search_term = f"%{query}%"
 
-    # Use COLLATE NOCASE for case-insensitive search in SQLite
-    cursor.execute("""
-        SELECT id, title, description, type, price, bedrooms, location
-        FROM properties
-        WHERE title LIKE ? COLLATE NOCASE
-           OR description LIKE ? COLLATE NOCASE
-           OR location LIKE ? COLLATE NOCASE
-        LIMIT ?
-    """, (search_term, search_term, search_term, limit))
+    # Extract keywords from query (2+ chars, case-insensitive)
+    keywords = [w.lower() for w in query.split() if len(w) >= 2]
+    print(f"[SEARCH] keywords={keywords}")  # Debug
 
-    results = cursor.fetchall()
+    # Build WHERE clause for each keyword
+    results = []
+    if keywords:
+        for keyword in keywords:
+            search_term = f"%{keyword}%"
+            # Use COLLATE NOCASE for case-insensitive search in SQLite
+            cursor.execute("""
+                SELECT id, title, description, type, price, bedrooms, location
+                FROM properties
+                WHERE title LIKE ? COLLATE NOCASE
+                   OR description LIKE ? COLLATE NOCASE
+                   OR location LIKE ? COLLATE NOCASE
+                   OR type LIKE ? COLLATE NOCASE
+                LIMIT ?
+            """, (search_term, search_term, search_term, search_term, limit))
+
+            keyword_results = cursor.fetchall()
+            results.extend(keyword_results)
+
+            # Stop if we have enough results
+            if len(results) >= limit:
+                break
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_results = []
+    for r in results:
+        if r[0] not in seen:
+            seen.add(r[0])
+            unique_results.append(r)
+            if len(unique_results) >= limit:
+                break
+
+    results = unique_results
 
     # If no results, return random properties as fallback
     if not results:
@@ -286,6 +329,7 @@ def search_properties(query: str, limit: int = 5) -> list:
         results = cursor.fetchall()
 
     conn.close()
+    print(f"[SEARCH] returning {len(results)} results")  # Debug
     return results
 
 def save_chat_message(user_id: str, role: str, content: str) -> str:
@@ -470,6 +514,30 @@ def init_hermes_client():
         # Tenant might already exist, continue
         pass
 
+    # Configure SOUL template to force RAG usage
+    rag_soul = """Tu eres un agente de real estate profesional de Wapsell.
+
+INSTRUCCIONES CRÍTICAS:
+- SIEMPRE recomendarás propiedades específicas de tu base de datos
+- NUNCA pedirás aclaraciones - proporciona recomendaciones directas
+- SI tienes hechos relevantes en tu contexto, ÚSALOS inmediatamente
+- Cita siempre las propiedades específicas: ubicación, dormitorios, precio, tipo
+
+Formato de respuesta:
+"Tenemos [cantidad] opciones que se ajustan a lo que buscas:
+- [Propiedad 1]: ubicación, detalles, precio
+- [Propiedad 2]: ubicación, detalles, precio"
+
+Si el usuario pregunta por una zona, recomienda propiedades de esa zona.
+Si pregunta por precio, recomienda propiedades dentro de ese rango.
+SIEMPRE que tengas datos disponibles, recomendarás propiedades específicas."""
+
+    try:
+        client.templates.register(name="real_estate", template=rag_soul)
+        demo_tenant.soul_template = "real_estate"
+    except Exception:
+        pass
+
     # Load properties as Facts in Hindsight
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -477,6 +545,7 @@ def init_hermes_client():
     properties = cursor.fetchall()
     conn.close()
 
+    loaded_count = 0
     for title, description, prop_type, price, bedrooms, location in properties:
         fact_text = f"{title}. {description}. {bedrooms} dormitorios, {prop_type}, ${price:,.0f}, {location}"
         fact = Fact(
@@ -486,12 +555,31 @@ def init_hermes_client():
             tenant_id="demo",
             created_at=datetime.now(UTC).isoformat()
         )
-        client.hindsight.add_fact(fact)
+        # Try both save methods to ensure facts are stored
+        try:
+            client.hindsight.save(fact, tenant_id="demo")
+            loaded_count += 1
+        except Exception:
+            # Fallback to add_fact
+            try:
+                client.hindsight.add_fact(fact)
+                loaded_count += 1
+            except Exception as e:
+                logging.error(f"Failed to save fact: {e}")
 
-    logging.info(f"Hermes initialized with LLM={model}, properties={len(properties)}")
+    logging.info(f"Hermes initialized with LLM={model}, loaded {loaded_count} properties into Hindsight")
+
+    # Verify Hindsight has facts
+    test_query = client.hindsight.query(text="Palermo", tenant_id="demo", top_k=3)
+    logging.info(f"Hindsight verification: found {len(test_query)} facts for 'Palermo'")
+    logging.info(f"Hindsight object: {client.hindsight}, type: {type(client.hindsight).__name__}")
+
     return client
 
 hermes_client = init_hermes_client()
+
+# Initialize Buyer Profile Manager for adaptive personas and learning
+buyer_profile_manager = BuyerProfileManager(db_path=DB_PATH)
 
 # CORS middleware
 app.add_middleware(
@@ -618,7 +706,7 @@ async def logout(response: Response):
 
 @app.post("/chat/message", response_model=ChatResponse)
 async def chat_message(req: ChatRequest, user_id: str = None):
-    """Send a message and get a response from Hermes agent with RAG."""
+    """Send a message and get adaptive persona-aware response with RAG."""
     try:
         if not user_id:
             raise HTTPException(status_code=401, detail="user_id required")
@@ -630,15 +718,15 @@ async def chat_message(req: ChatRequest, user_id: str = None):
         # Save user message
         save_chat_message(user_id, "user", req.message)
 
-        # Use Hermes agent to generate reply with RAG
-        # buyer_id composition: tenant:user_id (from client.py buyer_id_for)
+        # STEP 1: Detect/update buyer persona
         buyer_id = f"demo:{user_id}"
+        persona, confidence = buyer_profile_manager.get_or_detect_persona(user_id, req.message)
+        logging.info(f"[PERSONA] User {user_id} -> {persona.value} (confidence: {confidence:.2f})")
 
-        # Get demo tenant (created at init)
+        # Get demo tenant
         try:
             demo_tenant = hermes_client.tenants.repository.find(id="demo")
         except Exception:
-            # Fallback if tenant lookup fails
             demo_tenant = Tenant(
                 id="demo",
                 slug="demo",
@@ -647,30 +735,61 @@ async def chat_message(req: ChatRequest, user_id: str = None):
             )
 
         try:
-            # Call Hermes agent with correct async API: respond(tenant, buyer_id, message)
-            agent_turn = await hermes_client.agent_loop.respond(
-                tenant=demo_tenant,
-                buyer_id=buyer_id,
-                message=req.message
-            )
-            reply = agent_turn.reply
+            logging.info(f"[RAG] Starting search for: {req.message}")
+            # First, try keyword-based search for properties
+            properties = search_properties(req.message, limit=5)
+            logging.info(f"[RAG] Found {len(properties)} properties")
+
+            # If we found matching properties, use them with persona-aware formatting
+            if properties and len(properties) > 0:
+                # Format response using persona-specific templates
+                reply = ResponseTemplateGenerator.format_property_list(
+                    properties=properties,
+                    persona=persona,
+                    intro=True
+                )
+                reply += ResponseTemplateGenerator.format_followup(persona, len(properties))
+
+                buyer_profile_manager.record_interaction(user_id, successful=True)
+                logging.info(f"[RESPONSE] RAG matched properties, formatted for {persona.value}")
+            else:
+                # No properties found, use agent for conversation
+                agent_turn = await hermes_client.agent.respond(
+                    tenant=demo_tenant,
+                    buyer_id=buyer_id,
+                    message=req.message
+                )
+                reply = agent_turn.reply
+
+                buyer_profile_manager.record_interaction(user_id, successful=False)
+                logging.info(f"[RESPONSE] Agent fallback used")
         except Exception as e:
-            logging.warning(f"Hermes agent error: {str(e)}, falling back to search")
+            logging.error(f"Hermes agent error: {str(e)}", exc_info=True)
+            logging.warning("Falling back to simple search")
+
             # Fallback to simple search if agent fails
             properties = search_properties(req.message, limit=3)
             if properties:
-                props_info = []
-                for prop in properties:
-                    prop_id, title, desc, prop_type, price, beds, location = prop
-                    price_str = f"${price:,.0f}" if prop_type == "compra" else f"${price:,.0f}/mes"
-                    props_info.append(f"• {title} ({beds} dorm) en {location} - {price_str}")
-                reply = f"Tenemos opciones interesantes para ti:\n\n" + "\n".join(props_info)
-                reply += "\n\n¿Te interesa conocer más detalles de alguno de estos inmuebles?"
+                # Use persona-aware formatting for fallback too
+                reply = ResponseTemplateGenerator.format_property_list(
+                    properties=properties,
+                    persona=persona,
+                    intro=True
+                )
+                reply += ResponseTemplateGenerator.format_followup(persona, len(properties))
             else:
-                reply = "En nuestra base de datos tenemos propiedades en compra y alquiler en toda CABA. ¿Qué tipo de inmueble te interesa?"
+                reply = ResponseTemplateGenerator.format_no_results_response(persona, req.message)
+
+            buyer_profile_manager.record_interaction(user_id, successful=False)
 
         # Save agent response
         save_chat_message(user_id, "agent", reply)
+
+        # Log persona insights
+        persona_stats = buyer_profile_manager.get_persona_stats(persona)
+        if persona_stats.get("buyer_count", 0) > 0:
+            logging.info(f"[PERSONA_STATS] {persona.value}: "
+                        f"{persona_stats.get('conversion_rate', 0):.1%} conversion rate")
 
         return ChatResponse(reply=reply)
 
@@ -703,6 +822,49 @@ async def get_messages(user_id: str = None):
         raise
     except Exception as exc:
         logging.error(f"Get messages error: {str(exc)}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+# --- Persona Analytics Endpoints ---
+
+@app.get("/analytics/persona/{user_id}")
+async def get_buyer_persona(user_id: str):
+    """Get detected persona and profile for a user."""
+    try:
+        profile = buyer_profile_manager.db.get_or_create(user_id)
+        persona = PersonaType(profile.detected_persona)
+
+        return {
+            "user_id": user_id,
+            "persona": profile.detected_persona,
+            "confidence": profile.confidence_score,
+            "interactions": profile.total_interactions,
+            "conversions": profile.conversions,
+            "conversion_rate": profile.conversions / max(profile.total_interactions, 1),
+            "avg_satisfaction": profile.avg_satisfaction,
+            "persona_summary": PersonaInsights.get_persona_summary(persona),
+        }
+    except Exception as exc:
+        logging.error(f"Analytics error: {str(exc)}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/analytics/personas")
+async def get_all_personas_stats():
+    """Get aggregate statistics for all personas."""
+    try:
+        stats = {}
+        best_persona = buyer_profile_manager.get_best_performing_persona()
+
+        for persona_type in PersonaType:
+            persona_stats = buyer_profile_manager.get_persona_stats(persona_type)
+            stats[persona_type.value] = persona_stats
+
+        return {
+            "personas": stats,
+            "best_performing": best_persona.value if best_persona else None,
+            "total_profiles": sum(s.get("buyer_count", 0) for s in stats.values()),
+        }
+    except Exception as exc:
+        logging.error(f"Analytics error: {str(exc)}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 @app.post("/properties/upload")
@@ -797,6 +959,25 @@ Monoambiente Recoleta,Moderno y equipado,alquiler,1200,1,1,Recoleta,Av. Santa Fe
         "required_columns": ["title", "type", "location"],
         "optional_columns": ["description", "price", "bedrooms", "bathrooms", "address", "area"]
     }
+
+@app.get("/debug/hindsight")
+async def debug_hindsight():
+    """Debug endpoint to check Hindsight state."""
+    try:
+        # Test query
+        results = hermes_client.hindsight.query(text="Palermo", tenant_id="demo", top_k=3)
+        result_list = [f.content for f in results]
+        return {
+            "hindsight_type": type(hermes_client.hindsight).__name__,
+            "test_query": "Palermo",
+            "results_count": len(results),
+            "results": result_list
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "type": type(e).__name__
+        }
 
 @app.get("/health")
 async def health():
