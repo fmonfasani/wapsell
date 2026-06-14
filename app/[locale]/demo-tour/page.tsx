@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { Nav } from "@/components/Nav";
 import { TourHero } from "@/components/TourHero";
 import { HowItWorks } from "@/components/HowItWorks";
 import { FullDemo } from "@/components/FullDemo";
@@ -34,7 +33,6 @@ export default async function DemoTourPage({
 
   return (
     <>
-      <Nav />
       <main>
         <TourHero />
         <HowItWorks />
