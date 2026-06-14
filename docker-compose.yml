@@ -24,9 +24,10 @@ services:
         max-size: "10m"
         max-file: "5"
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8500:8000"
     volumes:
       - /tmp/wapsell-data:/tmp
+      - wapsell-db:/app
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -74,3 +75,6 @@ services:
         limits:
           cpus: "1.0"
           memory: 512M
+
+volumes:
+  wapsell-db:
