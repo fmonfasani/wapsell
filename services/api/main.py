@@ -884,7 +884,7 @@ async def chat_message(req: ChatRequest, user_id: str = None):
                 )
                 reply += ResponseTemplateGenerator.format_followup(persona, len(properties))
 
-                buyer_profile_manager.record_interaction(user_id, successful=True)
+                buyer_profile_manager.db.record_interaction(user_id, successful=True)
                 logging.info(f"[RESPONSE] RAG matched properties, formatted for {persona.value}")
             else:
                 # No properties found, use agent for conversation
@@ -895,7 +895,7 @@ async def chat_message(req: ChatRequest, user_id: str = None):
                 )
                 reply = agent_turn.reply
 
-                buyer_profile_manager.record_interaction(user_id, successful=False)
+                buyer_profile_manager.db.record_interaction(user_id, successful=False)
                 logging.info(f"[RESPONSE] Agent fallback used")
         except Exception as e:
             logging.error(f"Hermes agent error: {str(e)}", exc_info=True)
@@ -914,7 +914,7 @@ async def chat_message(req: ChatRequest, user_id: str = None):
             else:
                 reply = ResponseTemplateGenerator.format_no_results_response(persona, req.message)
 
-            buyer_profile_manager.record_interaction(user_id, successful=False)
+            buyer_profile_manager.db.record_interaction(user_id, successful=False)
 
         # Save agent response
         save_chat_message(user_id, "agent", reply)
