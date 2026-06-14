@@ -7,6 +7,7 @@ numbers. Bilingual (es/en). Pricing mirrors the landing (messages/*.json):
 Starter $99, Pro $299, Enterprise a medida; setup sin cargo, sin permanencia.
 """
 
+import re
 import unicodedata
 
 # --- intent keyword maps (es + en, accent-insensitive) ---
@@ -55,11 +56,192 @@ INTENT_KEYWORDS = {
     ],
 }
 
-PRICING = {
-    "starter": {"price": "$99", "name": "Starter"},
-    "pro": {"price": "$299", "name": "Pro"},
-    "enterprise": {"price": "a medida", "name": "Enterprise"},
+# ---------------------------------------------------------------------------
+# PRICING / QUOTE TABLE — single source of truth for auto-quoting.
+# Prices in ARS (local) and USD. Edit here and everything (agent answers,
+# /pricing, /quote) updates. Enterprise is "solicitar cotización" to the
+# customer, but ENTERPRISE_TIERS lets us auto-quote it internally by volume.
+# ---------------------------------------------------------------------------
+PLANS = {
+    "starter": {
+        "name": "Starter", "usd": 99, "ars": 49000,
+        "conversations": 500, "numbers": 1,
+        "features_es": ["500 conversaciones/mes", "1 número WhatsApp",
+                        "Catálogo único", "Soporte por email"],
+        "features_en": ["500 conversations/mo", "1 WhatsApp number",
+                        "Single catalog", "Email support"],
+    },
+    "pro": {
+        "name": "Pro", "usd": 299, "ars": 249000,
+        "conversations": 2000, "numbers": 1,
+        "features_es": ["2.000 conversaciones/mes", "Catálogo + RAG semántico",
+                        "CRM (HubSpot, Pipedrive)", "Soporte prioritario por WhatsApp"],
+        "features_en": ["2,000 conversations/mo", "Catalog + semantic RAG",
+                        "CRM (HubSpot, Pipedrive)", "Priority WhatsApp support"],
+    },
+    "enterprise": {
+        "name": "Enterprise", "usd": None, "ars": None, "quote": True,
+        "conversations": None, "numbers": None,
+        "features_es": ["Alto volumen", "Multi-número", "A medida"],
+        "features_en": ["High volume", "Multi-number", "Custom"],
+    },
 }
+
+# Auto-quote tiers for Enterprise, by monthly conversation volume.
+# NOTE: defaults — adjust the numbers to your real enterprise pricing.
+ENTERPRISE_TIERS = [
+    {"max_conversations": 5000, "usd": 590, "ars": 490000},
+    {"max_conversations": 10000, "usd": 990, "ars": 890000},
+    {"max_conversations": 25000, "usd": 1990, "ars": 1790000},
+    # above the last tier → custom ("hablemos")
+]
+
+
+def fmt_ars(n) -> str:
+    """Argentine thousands separator: 49000 -> '49.000'."""
+    if n is None:
+        return ""
+    return f"{n:,.0f}".replace(",", ".")
+
+
+def money(plan_key: str, lang: str = "es") -> str:
+    """Render a plan's price as 'AR$ 49.000 · USD 99' (or quote label)."""
+    p = PLANS[plan_key]
+    if p.get("quote"):
+        return "solicitar cotización" if lang == "es" else "request a quote"
+    return f"AR$ {fmt_ars(p['ars'])} · USD {p['usd']}"
+
+
+def detect_volume(message: str):
+    """Parse a monthly conversation volume from a message (8000 / 8 mil / 8k)."""
+    m = _norm(message)
+    km = re.search(r"(\d+(?:[.,]\d+)?)\s*k\b", m)
+    if km:
+        return int(float(km.group(1).replace(",", ".")) * 1000)
+    mil = re.search(r"(\d+(?:[.,]\d+)?)\s*mil", m)
+    if mil:
+        return int(float(mil.group(1).replace(",", ".")) * 1000)
+    num = re.search(r"(\d[\d.,]{2,})", m)
+    if num:
+        raw = num.group(1).replace(".", "").replace(",", "")
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+    return None
+
+
+def detect_plan(message: str):
+    m = _norm(message)
+    if re.search(r"\benterprise\b", m):
+        return "enterprise"
+    if re.search(r"\bstarter\b", m):
+        return "starter"
+    if re.search(r"\bpro\b", m):  # word-boundary so "producto"/"proceso" don't match
+        return "pro"
+    return None
+
+
+def auto_quote(conversations=None, plan=None, lang="es"):
+    """Automatic quote from the table. Returns (data_dict, text)."""
+    es = lang != "en"
+
+    # Explicit plan beats volume (except enterprise, which uses volume tiers).
+    if plan in ("starter", "pro"):
+        p = PLANS[plan]
+        txt = (
+            f"El plan *{p['name']}* sale *AR$ {fmt_ars(p['ars'])} / mes* "
+            f"(US$ {p['usd']}). ¿Lo activamos? 🟢"
+            if es else
+            f"The *{p['name']}* plan is *AR$ {fmt_ars(p['ars'])} / mo* "
+            f"(US$ {p['usd']}). Shall we activate it? 🟢"
+        )
+        return ({"plan": plan, "ars": p["ars"], "usd": p["usd"]}, txt)
+
+    # Volume-based routing.
+    if conversations is not None:
+        if conversations <= PLANS["starter"]["conversations"]:
+            key = "starter"
+        elif conversations <= PLANS["pro"]["conversations"]:
+            key = "pro"
+        else:
+            # Enterprise tiers.
+            tier = next((t for t in ENTERPRISE_TIERS if conversations <= t["max_conversations"]), None)
+            if tier:
+                txt = (
+                    f"Para ~{fmt_ars(conversations)} conversaciones/mes entrás en "
+                    f"*Enterprise*: *AR$ {fmt_ars(tier['ars'])} / mes* (US$ {tier['usd']}) "
+                    f"— estimación, la cerramos según tus integraciones. ¿Avanzamos?"
+                    if es else
+                    f"For ~{fmt_ars(conversations)} conversations/mo you're in "
+                    f"*Enterprise*: *AR$ {fmt_ars(tier['ars'])} / mo* (US$ {tier['usd']}) "
+                    f"— estimate, finalized per your integrations. Shall we move on?"
+                )
+                return ({"plan": "enterprise", "tier": tier["max_conversations"],
+                         "ars": tier["ars"], "usd": tier["usd"]}, txt)
+            txt = (
+                "Para ese volumen armamos un *Enterprise a medida*. Dejame tus datos "
+                "y te paso la cotización exacta. 👇"
+                if es else
+                "For that volume we build a *custom Enterprise* plan. Leave your "
+                "details and I'll send the exact quote. 👇"
+            )
+            return ({"plan": "enterprise", "tier": "custom"}, txt)
+
+        p = PLANS[key]
+        txt = (
+            f"Para ~{fmt_ars(conversations)} conversaciones/mes tu plan es "
+            f"*{p['name']}*: *AR$ {fmt_ars(p['ars'])} / mes* (US$ {p['usd']}). "
+            f"¿Lo activamos? 🟢"
+            if es else
+            f"For ~{fmt_ars(conversations)} conversations/mo your plan is "
+            f"*{p['name']}*: *AR$ {fmt_ars(p['ars'])} / mo* (US$ {p['usd']}). "
+            f"Shall we activate it? 🟢"
+        )
+        return ({"plan": key, "ars": p["ars"], "usd": p["usd"]}, txt)
+
+    # Enterprise with no volume → ask for it.
+    if plan == "enterprise":
+        txt = (
+            "Enterprise es *a medida*. Decime cuántas conversaciones por mes "
+            "manejás y te paso una estimación al instante. 📊"
+            if es else
+            "Enterprise is *custom*. Tell me how many conversations per month you "
+            "handle and I'll give you an instant estimate. 📊"
+        )
+        return ({"plan": "enterprise", "tier": None}, txt)
+
+    return (None, pricing_answer(lang))
+
+
+def pricing_answer(lang: str = "es") -> str:
+    """Full price list rendered from PLANS (ARS + USD)."""
+    es = lang != "en"
+    fk = "features_es" if es else "features_en"
+    s, pr, ent = PLANS["starter"], PLANS["pro"], PLANS["enterprise"]
+    if es:
+        return (
+            "*Planes* (setup sin cargo · sin permanencia):\n\n"
+            f"💼 *Starter — AR$ {fmt_ars(s['ars'])}/mes* (US$ {s['usd']})\n"
+            + "\n".join(f"• {f}" for f in s[fk]) + "\n\n"
+            f"⭐ *Pro — AR$ {fmt_ars(pr['ars'])}/mes* (US$ {pr['usd']}) — el más elegido\n"
+            + "\n".join(f"• {f}" for f in pr[fk]) + "\n\n"
+            f"🏢 *Enterprise — solicitar cotización*\n"
+            + "\n".join(f"• {f}" for f in ent[fk]) + "\n"
+            "_(decime cuántas conversaciones/mes manejás y te paso una estimación al instante)_\n\n"
+            "¿Te ayudo a elegir o querés *contratarlo*?"
+        )
+    return (
+        "*Plans* (free setup · no lock-in):\n\n"
+        f"💼 *Starter — AR$ {fmt_ars(s['ars'])}/mo* (US$ {s['usd']})\n"
+        + "\n".join(f"• {f}" for f in s[fk]) + "\n\n"
+        f"⭐ *Pro — AR$ {fmt_ars(pr['ars'])}/mo* (US$ {pr['usd']}) — most popular\n"
+        + "\n".join(f"• {f}" for f in pr[fk]) + "\n\n"
+        f"🏢 *Enterprise — request a quote*\n"
+        + "\n".join(f"• {f}" for f in ent[fk]) + "\n"
+        "_(tell me your monthly conversations and I'll give an instant estimate)_\n\n"
+        "Want help choosing, or ready to *get started*?"
+    )
 
 
 def _norm(text: str) -> str:
@@ -141,30 +323,6 @@ _ANSWERS = {
             "It's like your best salesperson, cloned and never sleeping. 🚀"
         ),
     },
-    "pricing": {
-        "es": (
-            "*Planes* (en USD · setup sin cargo · sin permanencia):\n\n"
-            "💼 *Starter — $99/mes*\n"
-            "• 500 conversaciones/mes\n• 1 número WhatsApp\n• Catálogo único\n"
-            "• Soporte por email\n\n"
-            "⭐ *Pro — $299/mes* (el más elegido)\n"
-            "• 2.000 conversaciones/mes\n• Catálogo + RAG semántico\n"
-            "• CRM (HubSpot, Pipedrive)\n• Soporte prioritario por WhatsApp\n\n"
-            "🏢 *Enterprise — a medida*\n• Alto volumen, multi-número, lo que necesites\n\n"
-            "¿Te ayudo a elegir el plan ideal o querés *contratarlo*?"
-        ),
-        "en": (
-            "*Plans* (USD · free setup · no lock-in):\n\n"
-            "💼 *Starter — $99/mo*\n"
-            "• 500 conversations/mo\n• 1 WhatsApp number\n• Single catalog\n"
-            "• Email support\n\n"
-            "⭐ *Pro — $299/mo* (most popular)\n"
-            "• 2,000 conversations/mo\n• Catalog + semantic RAG\n"
-            "• CRM (HubSpot, Pipedrive)\n• Priority WhatsApp support\n\n"
-            "🏢 *Enterprise — custom*\n• High volume, multi-number, whatever you need\n\n"
-            "Want help picking a plan, or ready to *get started*?"
-        ),
-    },
     "how_to_contract": {
         "es": (
             "Sumarte es rápido 🟢:\n"
@@ -208,6 +366,8 @@ _ANSWERS = {
 
 def sales_reply(intent: str, lang: str = "es") -> str:
     lang = "en" if lang == "en" else "es"
+    if intent == "pricing":
+        return pricing_answer(lang)  # rendered from the live PLANS table
     answer = _ANSWERS.get(intent)
     if not answer:
         return default_menu(lang)

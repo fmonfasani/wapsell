@@ -289,6 +289,11 @@ class ContactRequest(BaseModel):
 class DemoSessionOut(BaseModel):
     demo_id: str
 
+class QuoteRequest(BaseModel):
+    plan: Optional[str] = None
+    conversations: Optional[int] = None
+    lang: str = "es"
+
 class PropertyOut(BaseModel):
     id: str
     title: str
@@ -1011,7 +1016,18 @@ async def chat_message(req: ChatRequest, user_id: str = None, lang: str = "es"):
             else:
                 intent = wapsell_sales.detect_intent(msg)  # pricing/how/why/contract/...
                 properties = search_properties(msg, limit=5)
-                if intent:
+                if intent == "pricing":
+                    # Auto-quote if they mention a volume or a specific plan.
+                    vol = wapsell_sales.detect_volume(msg)
+                    plan = wapsell_sales.detect_plan(msg)
+                    if vol is not None or plan:
+                        _, reply = wapsell_sales.auto_quote(conversations=vol, plan=plan, lang=lang)
+                        logging.info(f"[RESPONSE] auto-quote vol={vol} plan={plan}")
+                    else:
+                        reply = wapsell_sales.pricing_answer(lang)
+                        logging.info("[RESPONSE] pricing table")
+                    buyer_profile_manager.db.record_interaction(user_id, successful=True)
+                elif intent:
                     # Core Wapsell sales answer (deterministic, correct prices).
                     reply = wapsell_sales.sales_reply(intent, lang)
                     logging.info(f"[RESPONSE] wapsell sales intent: {intent}")
@@ -1212,6 +1228,25 @@ async def app_overview(x_admin_token: Optional[str] = Header(None)):
     }
     conn.close()
     return overview
+
+# --- Pricing / Auto-quote Endpoints (public) ---
+
+@app.get("/pricing")
+async def get_pricing():
+    """Public pricing table (single source of truth for auto-quoting)."""
+    return {
+        "plans": wapsell_sales.PLANS,
+        "enterprise_tiers": wapsell_sales.ENTERPRISE_TIERS,
+        "currency": ["ARS", "USD"],
+    }
+
+@app.post("/quote")
+async def post_quote(req: QuoteRequest):
+    """Automatic quote from the table by plan and/or monthly conversations."""
+    data, text = wapsell_sales.auto_quote(
+        conversations=req.conversations, plan=req.plan, lang=req.lang
+    )
+    return {"quote": data, "message": text}
 
 # --- Persona Analytics Endpoints ---
 
