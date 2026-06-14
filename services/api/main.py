@@ -40,6 +40,9 @@ from buyer_personas import (
 )
 from buyer_profile_manager import BuyerProfileManager
 
+# Wapsell sales agent knowledge base (the demo sells Wapsell itself).
+import wapsell_sales
+
 try:
     import openpyxl
 except ImportError:
@@ -151,6 +154,71 @@ def init_db():
             created_at TEXT NOT NULL,
             captured_at TEXT,
             last_active TEXT
+        )
+    """)
+
+    # ---------------------------------------------------------------------
+    # TWO-LAYER DATA ARCHITECTURE
+    #   Capa 1 (demo, sin login): `leads`, `chat_messages`, `buyer_profiles`.
+    #   Capa 2 (app, con login):  `app_users`, `app_accounts`,
+    #                             `app_subscriptions`, `app_messages`.
+    # The two layers NEVER share tables. They are related ONLY through the
+    # `conversions` bridge (and, softly, by matching email/phone). This keeps
+    # them fully decoupled and trivial to split into two databases later.
+    # ---------------------------------------------------------------------
+
+    # Capa 2 — registered accounts (built out when the WhatsApp chip arrives).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_users (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            phone TEXT,
+            name TEXT,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_accounts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            business_name TEXT,
+            plan TEXT DEFAULT 'starter',
+            status TEXT DEFAULT 'trial',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES app_users(id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_subscriptions (
+            id TEXT PRIMARY KEY,
+            account_id TEXT NOT NULL,
+            plan TEXT NOT NULL,
+            status TEXT DEFAULT 'active',
+            started_at TEXT NOT NULL,
+            renews_at TEXT,
+            FOREIGN KEY (account_id) REFERENCES app_accounts(id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_messages (
+            id TEXT PRIMARY KEY,
+            account_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (account_id) REFERENCES app_accounts(id)
+        )
+    """)
+
+    # Bridge — the ONLY place a demo lead and an app user meet.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conversions (
+            id TEXT PRIMARY KEY,
+            demo_lead_id TEXT NOT NULL,
+            app_user_id TEXT NOT NULL,
+            matched_by TEXT,
+            created_at TEXT NOT NULL
         )
     """)
 
@@ -399,6 +467,45 @@ def get_identity(identity_id: str) -> bool:
         return True
     return get_lead(identity_id) is not None
 
+def link_conversion(app_user_id: str, email: str = "", phone: str = "") -> Optional[dict]:
+    """Bridge a demo lead to an app user when the contact matches.
+
+    The ONLY place the two layers are related. Called on app registration
+    (Capa 2). Matches a captured demo lead by email or phone, then records a
+    row in `conversions`. Returns the bridge row, or None if no demo lead.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    lead_row = None
+    matched_by = None
+    if email:
+        cursor.execute("SELECT id FROM leads WHERE email = ? ORDER BY captured_at DESC LIMIT 1", (email,))
+        lead_row = cursor.fetchone()
+        matched_by = "email" if lead_row else None
+    if not lead_row and phone:
+        cursor.execute("SELECT id FROM leads WHERE phone = ? ORDER BY captured_at DESC LIMIT 1", (phone,))
+        lead_row = cursor.fetchone()
+        matched_by = "phone" if lead_row else None
+    if not lead_row:
+        conn.close()
+        return None
+    bridge = {
+        "id": secrets.token_urlsafe(12),
+        "demo_lead_id": lead_row[0],
+        "app_user_id": app_user_id,
+        "matched_by": matched_by,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    cursor.execute(
+        """INSERT INTO conversions (id, demo_lead_id, app_user_id, matched_by, created_at)
+           VALUES (?, ?, ?, ?, ?)""",
+        (bridge["id"], bridge["demo_lead_id"], bridge["app_user_id"],
+         bridge["matched_by"], bridge["created_at"]),
+    )
+    conn.commit()
+    conn.close()
+    return bridge
+
 # --- Chat & Properties Utils ---
 
 def search_properties(query: str, limit: int = 5) -> list:
@@ -407,8 +514,17 @@ def search_properties(query: str, limit: int = 5) -> list:
     conn = get_db()
     cursor = conn.cursor()
 
-    # Extract keywords from query (2+ chars, case-insensitive)
-    keywords = [w.lower() for w in query.split() if len(w) >= 2]
+    # Extract keywords (3+ chars, drop stopwords) so filler words like "de"/"en"
+    # don't false-match properties on sales questions ("precio de wapsell").
+    _STOP = {
+        "los", "las", "una", "uno", "por", "que", "con", "del", "para", "como",
+        "cual", "cuales", "este", "esta", "esto", "tiene", "hay", "the", "and",
+        "for", "with", "what", "que", "una", "mas", "muy", "info", "sobre",
+    }
+    keywords = [
+        w.lower() for w in query.split()
+        if len(w) >= 3 and w.lower() not in _STOP
+    ]
     print(f"[SEARCH] keywords={keywords}")  # Debug
 
     # Build WHERE clause for each keyword
@@ -883,68 +999,42 @@ async def chat_message(req: ChatRequest, user_id: str = None, lang: str = "es"):
         persona, confidence = buyer_profile_manager.get_or_detect_persona(user_id, req.message)
         logging.info(f"[PERSONA] User {user_id} -> {persona.value} (confidence: {confidence:.2f})")
 
-        # Get demo tenant
+        # --- Hybrid reply: the agent SELLS Wapsell, and shows a live property
+        # example on request ("this is how I'd reply to YOUR customers"). ---
         try:
-            demo_tenant = hermes_client.tenants.repository.find(id="demo")
-        except Exception:
-            demo_tenant = Tenant(
-                id="demo",
-                slug="demo",
-                name="Demo Tenant",
-                plan="pro"
-            )
-
-        try:
-            logging.info(f"[RAG] Starting search for: {req.message}")
-            # First, try keyword-based search for properties
-            properties = search_properties(req.message, limit=5)
-            logging.info(f"[RAG] Found {len(properties)} properties")
-
-            # Priority: real property matches → greeting/small-talk → LLM agent.
-            if properties and len(properties) > 0:
-                # Format response using persona-specific templates
-                reply = ResponseTemplateGenerator.format_property_list(
-                    properties=properties,
-                    persona=persona,
-                    intro=True
-                )
-                reply += ResponseTemplateGenerator.format_followup(persona, len(properties))
-
+            msg = req.message
+            if wapsell_sales.wants_example(msg):
+                # Switch into the property showcase (the "demo within the demo").
+                reply = wapsell_sales.example_intro(lang)
+                logging.info("[RESPONSE] example intro")
                 buyer_profile_manager.db.record_interaction(user_id, successful=True)
-                logging.info(f"[RESPONSE] RAG matched properties, formatted for {persona.value}")
-            elif is_smalltalk(req.message):
-                # Greeting / small-talk: reply conversationally, don't dump props.
-                reply = greeting_reply(lang)
-                buyer_profile_manager.db.record_interaction(user_id, successful=False)
-                logging.info("[RESPONSE] greeting/small-talk handler")
             else:
-                # Substantive question with no direct match → conversational agent.
-                agent_turn = await hermes_client.agent.respond(
-                    tenant=demo_tenant,
-                    buyer_id=buyer_id,
-                    message=req.message
-                )
-                reply = agent_turn.reply
-
-                buyer_profile_manager.db.record_interaction(user_id, successful=False)
-                logging.info(f"[RESPONSE] Agent fallback used")
+                intent = wapsell_sales.detect_intent(msg)  # pricing/how/why/contract/...
+                properties = search_properties(msg, limit=5)
+                if intent:
+                    # Core Wapsell sales answer (deterministic, correct prices).
+                    reply = wapsell_sales.sales_reply(intent, lang)
+                    logging.info(f"[RESPONSE] wapsell sales intent: {intent}")
+                    buyer_profile_manager.db.record_interaction(user_id, successful=True)
+                elif properties:
+                    # Real-estate sample = "what your customers would experience".
+                    reply = ResponseTemplateGenerator.format_property_list(
+                        properties=properties, persona=persona, intro=True
+                    )
+                    reply += ResponseTemplateGenerator.format_followup(persona, len(properties))
+                    logging.info("[RESPONSE] property example showcase")
+                    buyer_profile_manager.db.record_interaction(user_id, successful=True)
+                elif is_smalltalk(msg):
+                    reply = wapsell_sales.greeting(lang)
+                    logging.info("[RESPONSE] wapsell greeting")
+                    buyer_profile_manager.db.record_interaction(user_id, successful=False)
+                else:
+                    reply = wapsell_sales.default_menu(lang)
+                    logging.info("[RESPONSE] wapsell default menu")
+                    buyer_profile_manager.db.record_interaction(user_id, successful=False)
         except Exception as e:
-            logging.error(f"Hermes agent error: {str(e)}", exc_info=True)
-            logging.warning("Falling back to simple search")
-
-            # Fallback to simple search if agent fails
-            properties = search_properties(req.message, limit=3)
-            if properties:
-                # Use persona-aware formatting for fallback too
-                reply = ResponseTemplateGenerator.format_property_list(
-                    properties=properties,
-                    persona=persona,
-                    intro=True
-                )
-                reply += ResponseTemplateGenerator.format_followup(persona, len(properties))
-            else:
-                reply = ResponseTemplateGenerator.format_no_results_response(persona, req.message)
-
+            logging.error(f"Reply error: {str(e)}", exc_info=True)
+            reply = wapsell_sales.default_menu(lang)
             buyer_profile_manager.db.record_interaction(user_id, successful=False)
 
         # Save agent response
@@ -1090,6 +1180,38 @@ async def lead_transcript(lead_id: str, x_admin_token: Optional[str] = Header(No
             for m in messages
         ],
     }
+
+@app.get("/app/overview")
+async def app_overview(x_admin_token: Optional[str] = Header(None)):
+    """Snapshot of the two-layer architecture. Sales-only (X-Admin-Token)."""
+    _require_admin(x_admin_token)
+    conn = get_db()
+    cursor = conn.cursor()
+
+    def count(table: str) -> int:
+        try:
+            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            return cursor.fetchone()[0]
+        except Exception:
+            return 0
+
+    overview = {
+        "capa1_demo": {
+            "leads": count("leads"),
+            "messages": count("chat_messages"),
+            "personas_tracked": count("buyer_profiles"),
+        },
+        "capa2_app": {
+            "users": count("app_users"),
+            "accounts": count("app_accounts"),
+            "subscriptions": count("app_subscriptions"),
+            "messages": count("app_messages"),
+        },
+        "bridge": {"conversions": count("conversions")},
+        "note": "Las capas no comparten tablas; se relacionan solo via 'conversions'.",
+    }
+    conn.close()
+    return overview
 
 # --- Persona Analytics Endpoints ---
 

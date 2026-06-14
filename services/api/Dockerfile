@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
 COPY buyer_personas.py .
 COPY buyer_profile_manager.py .
+COPY wapsell_sales.py .
 
 # Data dir for the persistent SQLite volume (WAPSELL_DB_PATH=/data/wapsell.db).
 RUN mkdir -p /data

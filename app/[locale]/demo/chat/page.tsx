@@ -46,18 +46,18 @@ const STR: Record<"es" | "en", Strings> = {
     back: "Volver",
     placeholder: "Escribí un mensaje",
     welcome:
-      "¡Hola! 👋 Soy el asistente de Wapsell. Contame qué estás buscando: zona, presupuesto, ambientes… y te muestro opciones al instante.",
-    examples: "Probá: \"Busco depto de lujo en Palermo\" · \"Algo barato\" · \"Para invertir\"",
-    captureTitle: "¿Seguimos por WhatsApp? 🟢",
+      "¡Hola! 👋 Soy el asistente de ventas de Wapsell. Vendo por WhatsApp 24/7 para que no pierdas ni un cliente — y este chat es un ejemplo en vivo de cómo trabajo. 😉 ¿Querés saber cómo funciono, los precios, o ver un ejemplo en vivo?",
+    examples: "Probá: \"¿Cómo funciona?\" · \"Precios\" · \"Mostrame un ejemplo\"",
+    captureTitle: "¿Arrancamos con Wapsell? 🟢",
     captureSubtitle:
-      "Te paso estas opciones y novedades directo a tu WhatsApp. Dejame tus datos:",
+      "Dejame tus datos y te contactamos por WhatsApp para sumarte (onboarding sin cargo):",
     name: "Nombre",
     email: "Email",
     phone: "WhatsApp (ej: +54 9 11 …)",
-    submit: "Continuar por WhatsApp",
-    skip: "Seguir viendo en el chat",
+    submit: "Quiero sumar Wapsell",
+    skip: "Seguir charlando",
     capturedMsg:
-      "¡Genial! 🙌 Te vamos a contactar por WhatsApp con las mejores opciones. Mientras tanto, seguí preguntando lo que quieras.",
+      "¡Genial! 🙌 Te contactamos por WhatsApp para el onboarding y ponerte en vivo. Mientras tanto, preguntame lo que quieras sobre Wapsell.",
     errorMsg: "Uy, hubo un problema. Probá de nuevo en un momento.",
   },
   en: {
@@ -66,18 +66,18 @@ const STR: Record<"es" | "en", Strings> = {
     back: "Back",
     placeholder: "Type a message",
     welcome:
-      "Hi! 👋 I'm the Wapsell assistant. Tell me what you're looking for — area, budget, rooms… and I'll show you options instantly.",
-    examples: "Try: \"Looking for a luxury flat in Palermo\" · \"Something cheap\" · \"To invest\"",
-    captureTitle: "Continue on WhatsApp? 🟢",
+      "Hi! 👋 I'm the Wapsell sales assistant. I sell on WhatsApp 24/7 so you never lose a customer — and this chat is a live example of how I work. 😉 Want to know how I work, the pricing, or see a live example?",
+    examples: "Try: \"How does it work?\" · \"Pricing\" · \"Show me an example\"",
+    captureTitle: "Ready to start with Wapsell? 🟢",
     captureSubtitle:
-      "I'll send these options and updates straight to your WhatsApp. Leave your details:",
+      "Leave your details and we'll reach out on WhatsApp to get you onboarded (free setup):",
     name: "Name",
     email: "Email",
     phone: "WhatsApp (e.g. +54 9 11 …)",
-    submit: "Continue on WhatsApp",
-    skip: "Keep browsing in chat",
+    submit: "I want Wapsell",
+    skip: "Keep chatting",
     capturedMsg:
-      "Awesome! 🙌 We'll reach out on WhatsApp with the best options. Meanwhile, keep asking anything.",
+      "Awesome! 🙌 We'll reach out on WhatsApp to onboard you and get you live. Meanwhile, ask me anything about Wapsell.",
     errorMsg: "Oops, something went wrong. Try again in a moment.",
   },
 } as const;
@@ -225,8 +225,8 @@ export default function DemoChatPage() {
     ]);
     const greeting =
       locale === "es"
-        ? "Hola, vengo del chat de Wapsell y quiero ver más propiedades."
-        : "Hi, I'm coming from the Wapsell chat and want to see more properties.";
+        ? "Hola, vengo del chat de Wapsell y quiero sumar el agente de ventas a mi negocio."
+        : "Hi, I'm coming from the Wapsell chat and want to add the sales agent to my business.";
     window.open(buildWaLink(greeting), "_blank");
   };
 
