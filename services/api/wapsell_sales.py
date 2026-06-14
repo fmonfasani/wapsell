@@ -87,13 +87,14 @@ PLANS = {
     },
 }
 
-# Auto-quote tiers for Enterprise, by monthly conversation volume.
-# NOTE: defaults — adjust the numbers to your real enterprise pricing.
+# Auto-quote tiers for Enterprise, by monthly conversation volume (ARS).
+# The last tier (max_conversations=None) is the catch-all for >100k.
 ENTERPRISE_TIERS = [
-    {"max_conversations": 5000, "usd": 590, "ars": 490000},
-    {"max_conversations": 10000, "usd": 990, "ars": 890000},
-    {"max_conversations": 25000, "usd": 1990, "ars": 1790000},
-    # above the last tier → custom ("hablemos")
+    {"max_conversations": 5000, "ars": 499000},
+    {"max_conversations": 20000, "ars": 899000},
+    {"max_conversations": 50000, "ars": 1499000},
+    {"max_conversations": 100000, "ars": 2499000},
+    {"max_conversations": None, "ars": 4999000},  # > 100.000
 ]
 
 
@@ -178,28 +179,24 @@ def auto_quote(conversations=None, plan=None, lang="es"):
         elif conversations <= PLANS["pro"]["conversations"]:
             key = "pro"
         else:
-            # Enterprise tiers.
-            tier = next((t for t in ENTERPRISE_TIERS if conversations <= t["max_conversations"]), None)
-            if tier:
-                txt = (
-                    f"Para ~{fmt_ars(conversations)} conversaciones/mes entrás en "
-                    f"*Enterprise*: *AR$ {fmt_ars(tier['ars'])} / mes* (US$ {tier['usd']}) "
-                    f"— estimación, la cerramos según tus integraciones. ¿Avanzamos?"
-                    if es else
-                    f"For ~{fmt_ars(conversations)} conversations/mo you're in "
-                    f"*Enterprise*: *AR$ {fmt_ars(tier['ars'])} / mo* (US$ {tier['usd']}) "
-                    f"— estimate, finalized per your integrations. Shall we move on?"
-                )
-                return ({"plan": "enterprise", "tier": tier["max_conversations"],
-                         "ars": tier["ars"], "usd": tier["usd"]}, txt)
+            # Enterprise tiers (last tier has max_conversations=None = catch-all).
+            tier = None
+            for t in ENTERPRISE_TIERS:
+                if t["max_conversations"] is None or conversations <= t["max_conversations"]:
+                    tier = t
+                    break
+            usd_part = f" (US$ {tier['usd']})" if tier.get("usd") else ""
             txt = (
-                "Para ese volumen armamos un *Enterprise a medida*. Dejame tus datos "
-                "y te paso la cotización exacta. 👇"
+                f"Para ~{fmt_ars(conversations)} conversaciones/mes entrás en "
+                f"*Enterprise*: *AR$ {fmt_ars(tier['ars'])} / mes*{usd_part} "
+                f"— estimación, la cerramos según tus integraciones. ¿Avanzamos?"
                 if es else
-                "For that volume we build a *custom Enterprise* plan. Leave your "
-                "details and I'll send the exact quote. 👇"
+                f"For ~{fmt_ars(conversations)} conversations/mo you're in "
+                f"*Enterprise*: *AR$ {fmt_ars(tier['ars'])} / mo*{usd_part} "
+                f"— estimate, finalized per your integrations. Shall we move on?"
             )
-            return ({"plan": "enterprise", "tier": "custom"}, txt)
+            return ({"plan": "enterprise", "tier": tier["max_conversations"],
+                     "ars": tier["ars"], "usd": tier.get("usd")}, txt)
 
         p = PLANS[key]
         txt = (
