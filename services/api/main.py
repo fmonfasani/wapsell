@@ -314,6 +314,9 @@ def send_verification_email(to_email: str, verify_url: str, lang: str = "es") ->
         headers={
             "Authorization": f"Bearer {RESEND_API_KEY}",
             "Content-Type": "application/json",
+            # Cloudflare (in front of Resend) blocks the default Python-urllib
+            # User-Agent with a 403/1010. A real UA gets through.
+            "User-Agent": "wapsell/1.0 (+https://wapsell.com)",
         },
     )
     try:
