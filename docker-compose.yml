@@ -24,7 +24,7 @@ services:
         max-size: "10m"
         max-file: "5"
     ports:
-      - "127.0.0.1:8500:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env.production
     volumes:
