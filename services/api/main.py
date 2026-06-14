@@ -446,19 +446,45 @@ def search_properties(query: str, limit: int = 5) -> list:
 
     results = unique_results
 
-    # If no results, return random properties as fallback
-    if not results:
-        cursor.execute("""
-            SELECT id, title, description, type, price, bedrooms, location
-            FROM properties
-            ORDER BY RANDOM()
-            LIMIT ?
-        """, (limit,))
-        results = cursor.fetchall()
+    # NOTE: no random fallback. If nothing matches we return [] so the chat
+    # can reply conversationally (a greeting / clarifying question) instead of
+    # dumping unrelated properties for messages like "hola" or "¿cómo estás?".
 
     conn.close()
     print(f"[SEARCH] returning {len(results)} results")  # Debug
     return results
+
+# Greeting / small-talk detection so the bot answers conversationally instead
+# of dumping properties. Kept deliberately simple and fast (no LLM call).
+_GREETING_HINTS = (
+    "hola", "holaa", "ola", "buenas", "buen dia", "buen día", "buenos dias",
+    "buenos días", "buenas tardes", "buenas noches", "hey", "ey", "hi", "hello",
+    "que tal", "qué tal", "como estas", "cómo estás", "como andas", "cómo andás",
+    "como va", "cómo va", "todo bien", "que hacés", "qué hacés", "gracias",
+    "saludos", "buen finde",
+)
+
+def is_smalltalk(message: str) -> bool:
+    """True for short greetings / small-talk with no property-search intent."""
+    m = message.strip().lower()
+    if len(m) > 40:
+        return False
+    return any(h in m for h in _GREETING_HINTS)
+
+def greeting_reply(lang: str = "es") -> str:
+    """Warm, sales-oriented opener that nudges the visitor to share criteria."""
+    if lang == "en":
+        return (
+            "Hi! 👋 Great to have you here. I help you find your next property in "
+            "Buenos Aires.\n\nTell me what you're after — area, budget and how many "
+            "rooms — and I'll show you the best options right away. 🏡"
+        )
+    return (
+        "¡Hola! 👋 Un gusto tenerte por acá. Te ayudo a encontrar tu próxima "
+        "propiedad en Buenos Aires.\n\nContame qué estás buscando — zona, "
+        "presupuesto y cuántos ambientes — y te muestro las mejores opciones al "
+        "instante. 🏡"
+    )
 
 def save_chat_message(user_id: str, role: str, content: str) -> str:
     """Save a chat message to database."""
@@ -839,7 +865,7 @@ async def logout(response: Response):
 # --- Chat Endpoints ---
 
 @app.post("/chat/message", response_model=ChatResponse)
-async def chat_message(req: ChatRequest, user_id: str = None):
+async def chat_message(req: ChatRequest, user_id: str = None, lang: str = "es"):
     """Send a message and get adaptive persona-aware response with RAG."""
     try:
         if not user_id:
@@ -874,7 +900,7 @@ async def chat_message(req: ChatRequest, user_id: str = None):
             properties = search_properties(req.message, limit=5)
             logging.info(f"[RAG] Found {len(properties)} properties")
 
-            # If we found matching properties, use them with persona-aware formatting
+            # Priority: real property matches → greeting/small-talk → LLM agent.
             if properties and len(properties) > 0:
                 # Format response using persona-specific templates
                 reply = ResponseTemplateGenerator.format_property_list(
@@ -886,8 +912,13 @@ async def chat_message(req: ChatRequest, user_id: str = None):
 
                 buyer_profile_manager.db.record_interaction(user_id, successful=True)
                 logging.info(f"[RESPONSE] RAG matched properties, formatted for {persona.value}")
+            elif is_smalltalk(req.message):
+                # Greeting / small-talk: reply conversationally, don't dump props.
+                reply = greeting_reply(lang)
+                buyer_profile_manager.db.record_interaction(user_id, successful=False)
+                logging.info("[RESPONSE] greeting/small-talk handler")
             else:
-                # No properties found, use agent for conversation
+                # Substantive question with no direct match → conversational agent.
                 agent_turn = await hermes_client.agent.respond(
                     tenant=demo_tenant,
                     buyer_id=buyer_id,

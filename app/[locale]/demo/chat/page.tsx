@@ -179,11 +179,14 @@ export default function DemoChatPage() {
     setSending(true);
 
     try {
-      const res = await fetch(`${API_BASE}/chat/message?user_id=${demoId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
-      });
+      const res = await fetch(
+        `${API_BASE}/chat/message?user_id=${demoId}&lang=${locale}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text }),
+        }
+      );
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setMessages((prev) => [
