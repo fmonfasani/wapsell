@@ -4,6 +4,7 @@ import { BRAND, buildWaLink } from "@/lib/constants";
 type Tier = {
   name: string;
   price: string;
+  priceSub?: string;
   cadence?: string;
   features: string[];
   cta: string;
@@ -19,6 +20,7 @@ export function Pricing() {
     {
       name: t("starterName"),
       price: t("starterPrice"),
+      priceSub: t("starterUsd"),
       cadence: t("perMonth"),
       features: [
         t("starterF1"),
@@ -31,6 +33,7 @@ export function Pricing() {
     {
       name: t("proName"),
       price: t("proPrice"),
+      priceSub: t("proUsd"),
       cadence: t("perMonth"),
       features: [
         t("proF1"),
@@ -109,12 +112,17 @@ function PricingCard({
 
       <p className="eyebrow mb-4">{tier.name}</p>
 
-      <div className="flex items-baseline gap-1 mb-6">
-        <span className="font-mono font-medium text-5xl text-ink">
-          {tier.price}
-        </span>
-        {tier.cadence ? (
-          <span className="text-ink-muted text-base">{tier.cadence}</span>
+      <div className="mb-6">
+        <div className="flex items-baseline gap-1">
+          <span className="font-mono font-medium text-3xl md:text-4xl text-ink">
+            {tier.price}
+          </span>
+          {tier.cadence ? (
+            <span className="text-ink-muted text-base">{tier.cadence}</span>
+          ) : null}
+        </div>
+        {tier.priceSub ? (
+          <p className="text-ink-muted text-sm mt-1">{tier.priceSub}{tier.cadence}</p>
         ) : null}
       </div>
 
