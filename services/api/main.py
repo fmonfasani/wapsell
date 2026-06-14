@@ -1461,6 +1461,27 @@ async def list_deals(x_admin_token: Optional[str] = Header(None)):
     conn.close()
     return {"total": len(deals), "deals": deals}
 
+# Pipeline stages a deal can move through.
+DEAL_STAGES = ["new", "qualified", "negotiation", "won", "lost"]
+
+@app.patch("/app/deals/{deal_id}")
+async def update_deal(deal_id: str, stage: str = None,
+                      x_admin_token: Optional[str] = Header(None)):
+    """Move a deal through the pipeline. Sales-only (X-Admin-Token)."""
+    _require_admin(x_admin_token)
+    if stage not in DEAL_STAGES:
+        raise HTTPException(status_code=400, detail=f"stage must be one of {DEAL_STAGES}")
+    deal = get_deal(deal_id)
+    if deal is None:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE app_deals SET stage = ? WHERE id = ?", (stage, deal_id))
+    conn.commit()
+    conn.close()
+    logging.info(f"[DEAL] {deal_id} stage -> {stage}")
+    return {"id": deal_id, "stage": stage}
+
 # --- Pricing / Auto-quote Endpoints (public) ---
 
 @app.get("/pricing")

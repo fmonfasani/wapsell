@@ -17,7 +17,7 @@ export function Navbar() {
   const demoCta = locale === "en" ? "Try the demo" : "Probar demo";
 
   // Hide the marketing navbar on the immersive chat and the internal console.
-  if (pathname?.includes("/demo/chat") || pathname?.includes("/admin")) return null;
+  if (pathname?.includes("/demo/chat") || pathname?.includes("/ventas")) return null;
 
   return (
     <header className="sticky top-0 z-50 bg-cream/80 backdrop-blur border-b border-cream-300">
