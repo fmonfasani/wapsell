@@ -232,7 +232,8 @@ export default function DemoChatPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#d1d7db" }} className="flex flex-col">
+    <div className="flex min-h-[100dvh] items-stretch justify-center bg-gradient-to-br from-slate-200 to-slate-400 sm:items-center sm:p-4 md:p-6">
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl ring-1 ring-black/5 sm:h-[88vh] sm:max-h-[820px] sm:max-w-md sm:rounded-2xl">
       {/* Header */}
       <header
         style={{ background: "#008069" }}
@@ -307,6 +308,7 @@ export default function DemoChatPage() {
           </svg>
         </button>
       </form>
+      </div>
     </div>
   );
 }
