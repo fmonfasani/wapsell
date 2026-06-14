@@ -1,12 +1,13 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-email-validator==2.0.0
-pytest==7.4.3
-httpx==0.25.2
-openpyxl==3.1.0
-pdfplumber==0.10.3
-python-multipart==0.0.6
+# Ranges chosen to be compatible with the wapsell SDK below
+# (wapsell 0.16.0 requires fastapi>=0.110,<1.0, which needs pydantic>=2.7).
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27,<1.0
+pydantic>=2.7,<3
+email-validator>=2.1
+httpx>=0.25
+openpyxl>=3.1
+pdfplumber>=0.10
+python-multipart>=0.0.9
 # The SDK is published from the waseller repo but imports as `wapsell`.
 # Pinned to the exact commit the working production container uses, so rebuilds
 # are reproducible (the old `waseller==0.6.0` pin was wrong and breaks the build).
