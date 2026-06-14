@@ -64,7 +64,7 @@ INTENT_KEYWORDS = {
 # ---------------------------------------------------------------------------
 PLANS = {
     "starter": {
-        "name": "Starter", "usd": 99, "ars": 49000,
+        "name": "Starter", "usd": 49, "ars": 49000,
         "conversations": 500, "numbers": 1,
         "features_es": ["500 conversaciones/mes", "1 número WhatsApp",
                         "Catálogo único", "Soporte por email"],
@@ -72,7 +72,7 @@ PLANS = {
                         "Single catalog", "Email support"],
     },
     "pro": {
-        "name": "Pro", "usd": 299, "ars": 249000,
+        "name": "Pro", "usd": 249, "ars": 249000,
         "conversations": 2000, "numbers": 1,
         "features_es": ["2.000 conversaciones/mes", "Catálogo + RAG semántico",
                         "CRM (HubSpot, Pipedrive)", "Soporte prioritario por WhatsApp"],
@@ -106,11 +106,13 @@ def fmt_ars(n) -> str:
 
 
 def money(plan_key: str, lang: str = "es") -> str:
-    """Render a plan's price as 'AR$ 49.000 · USD 99' (or quote label)."""
+    """Render a plan's price in the locale's currency (ES→ARS, EN→USD)."""
     p = PLANS[plan_key]
     if p.get("quote"):
-        return "solicitar cotización" if lang == "es" else "request a quote"
-    return f"AR$ {fmt_ars(p['ars'])} · USD {p['usd']}"
+        return "solicitar cotización" if lang == "es" else "consult pricing"
+    if lang == "en":
+        return f"US$ {p['usd']}"
+    return f"AR$ {fmt_ars(p['ars'])}"
 
 
 def detect_volume(message: str):
@@ -167,18 +169,19 @@ def detect_plan(message: str):
 
 
 def auto_quote(conversations=None, plan=None, lang="es"):
-    """Automatic quote from the table. Returns (data_dict, text)."""
+    """Automatic quote from the table (single currency per locale)."""
     es = lang != "en"
 
-    # Explicit plan beats volume (except enterprise, which uses volume tiers).
+    def price(p):
+        return f"AR$ {fmt_ars(p['ars'])}" if es else f"US$ {p['usd']}"
+
+    # Explicit starter/pro plan.
     if plan in ("starter", "pro"):
         p = PLANS[plan]
         txt = (
-            f"El plan *{p['name']}* sale *AR$ {fmt_ars(p['ars'])} / mes* "
-            f"(US$ {p['usd']}). ¿Lo activamos? 🟢"
+            f"El plan *{p['name']}* sale *{price(p)} / mes*. ¿Lo activamos? 🟢"
             if es else
-            f"The *{p['name']}* plan is *AR$ {fmt_ars(p['ars'])} / mo* "
-            f"(US$ {p['usd']}). Shall we activate it? 🟢"
+            f"The *{p['name']}* plan is *{price(p)} / mo*. Shall we activate it? 🟢"
         )
         return ({"plan": plan, "ars": p["ars"], "usd": p["usd"]}, txt)
 
@@ -195,28 +198,28 @@ def auto_quote(conversations=None, plan=None, lang="es"):
                 if t["max_conversations"] is None or conversations <= t["max_conversations"]:
                     tier = t
                     break
-            usd_part = f" (US$ {tier['usd']})" if tier.get("usd") else ""
-            txt = (
-                f"Para ~{fmt_ars(conversations)} conversaciones/mes entrás en "
-                f"*Enterprise*: *AR$ {fmt_ars(tier['ars'])} / mes*{usd_part} "
-                f"— estimación, la cerramos según tus integraciones. ¿Avanzamos?"
-                if es else
-                f"For ~{fmt_ars(conversations)} conversations/mo you're in "
-                f"*Enterprise*: *AR$ {fmt_ars(tier['ars'])} / mo*{usd_part} "
-                f"— estimate, finalized per your integrations. Shall we move on?"
-            )
+            if es:
+                txt = (
+                    f"Para ~{fmt_ars(conversations)} conversaciones/mes entrás en "
+                    f"*Enterprise*: *AR$ {fmt_ars(tier['ars'])} / mes* — estimación, "
+                    f"la cerramos según tus integraciones. ¿Avanzamos?"
+                )
+            else:
+                # No USD enterprise table → consult.
+                txt = (
+                    "For that volume, *Enterprise* is custom. Leave your details and "
+                    "we'll send you a tailored quote. 👇"
+                )
             return ({"plan": "enterprise", "tier": tier["max_conversations"],
-                     "ars": tier["ars"], "usd": tier.get("usd")}, txt)
+                     "ars": tier["ars"]}, txt)
 
         p = PLANS[key]
         txt = (
             f"Para ~{fmt_ars(conversations)} conversaciones/mes tu plan es "
-            f"*{p['name']}*: *AR$ {fmt_ars(p['ars'])} / mes* (US$ {p['usd']}). "
-            f"¿Lo activamos? 🟢"
+            f"*{p['name']}*: *{price(p)} / mes*. ¿Lo activamos? 🟢"
             if es else
             f"For ~{fmt_ars(conversations)} conversations/mo your plan is "
-            f"*{p['name']}*: *AR$ {fmt_ars(p['ars'])} / mo* (US$ {p['usd']}). "
-            f"Shall we activate it? 🟢"
+            f"*{p['name']}*: *{price(p)} / mo*. Shall we activate it? 🟢"
         )
         return ({"plan": key, "ars": p["ars"], "usd": p["usd"]}, txt)
 
@@ -242,9 +245,9 @@ def pricing_answer(lang: str = "es") -> str:
     if es:
         return (
             "*Planes* (setup sin cargo · sin permanencia):\n\n"
-            f"💼 *Starter — AR$ {fmt_ars(s['ars'])}/mes* (US$ {s['usd']})\n"
+            f"💼 *Starter — AR$ {fmt_ars(s['ars'])}/mes*\n"
             + "\n".join(f"• {f}" for f in s[fk]) + "\n\n"
-            f"⭐ *Pro — AR$ {fmt_ars(pr['ars'])}/mes* (US$ {pr['usd']}) — el más elegido\n"
+            f"⭐ *Pro — AR$ {fmt_ars(pr['ars'])}/mes* — el más elegido\n"
             + "\n".join(f"• {f}" for f in pr[fk]) + "\n\n"
             f"🏢 *Enterprise — solicitar cotización*\n"
             + "\n".join(f"• {f}" for f in ent[fk]) + "\n"
@@ -253,11 +256,11 @@ def pricing_answer(lang: str = "es") -> str:
         )
     return (
         "*Plans* (free setup · no lock-in):\n\n"
-        f"💼 *Starter — AR$ {fmt_ars(s['ars'])}/mo* (US$ {s['usd']})\n"
+        f"💼 *Starter — US$ {s['usd']}/mo*\n"
         + "\n".join(f"• {f}" for f in s[fk]) + "\n\n"
-        f"⭐ *Pro — AR$ {fmt_ars(pr['ars'])}/mo* (US$ {pr['usd']}) — most popular\n"
+        f"⭐ *Pro — US$ {pr['usd']}/mo* — most popular\n"
         + "\n".join(f"• {f}" for f in pr[fk]) + "\n\n"
-        f"🏢 *Enterprise — request a quote*\n"
+        f"🏢 *Enterprise — consult pricing*\n"
         + "\n".join(f"• {f}" for f in ent[fk]) + "\n"
         "_(tell me your monthly conversations and I'll give an instant estimate)_\n\n"
         "Want help choosing, or ready to *get started*?"
