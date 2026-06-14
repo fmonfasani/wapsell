@@ -1016,7 +1016,7 @@ async def chat_message(req: ChatRequest, user_id: str = None, lang: str = "es"):
             else:
                 intent = wapsell_sales.detect_intent(msg)  # pricing/how/why/contract/...
                 properties = search_properties(msg, limit=5)
-                if intent == "pricing":
+                if intent == "pricing" or wapsell_sales.is_quote_request(msg):
                     # Auto-quote if they mention a volume or a specific plan.
                     vol = wapsell_sales.detect_volume(msg)
                     plan = wapsell_sales.detect_plan(msg)

@@ -131,6 +131,19 @@ def detect_volume(message: str):
     return None
 
 
+_QUOTE_CTX = (
+    "conversacion", "conversaciones", "mensaje", "mensajes", "volumen",
+    "lead", "leads", "contacto", "contactos", "cotiz", "clientes por",
+)
+
+def is_quote_request(message: str) -> bool:
+    """True when the message is clearly asking for a volume-based quote."""
+    m = _norm(message)
+    if "cotiz" in m:
+        return True
+    return detect_volume(message) is not None and any(c in m for c in _QUOTE_CTX)
+
+
 def detect_plan(message: str):
     m = _norm(message)
     if re.search(r"\benterprise\b", m):
