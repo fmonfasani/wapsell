@@ -136,13 +136,23 @@ _QUOTE_CTX = (
     "conversacion", "conversaciones", "mensaje", "mensajes", "volumen",
     "lead", "leads", "contacto", "contactos", "cotiz", "clientes por",
 )
+_MONEY_WORDS = ("peso", "pesos", "dolar", "dolares", "usd", "ars", "$", "euro", "plata", "guita")
 
 def is_quote_request(message: str) -> bool:
     """True when the message is clearly asking for a volume-based quote."""
     m = _norm(message)
     if "cotiz" in m:
         return True
-    return detect_volume(message) is not None and any(c in m for c in _QUOTE_CTX)
+    vol = detect_volume(message)
+    if vol is None:
+        return False
+    if any(c in m for c in _QUOTE_CTX):
+        return True
+    # Short message that is basically just a number (no money word) → treat the
+    # number as a conversation volume (e.g. "20 mil", "manejo 8k", "30000").
+    if len(m.split()) <= 3 and not any(w in m for w in _MONEY_WORDS):
+        return True
+    return False
 
 
 def detect_plan(message: str):
