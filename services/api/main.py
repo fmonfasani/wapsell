@@ -715,48 +715,43 @@ def promote_lead_to_deal(lead_id: str) -> Optional[dict]:
 # --- Chat & Properties Utils ---
 
 def search_properties(query: str, limit: int = 5) -> list:
-    """Search properties by keyword (title, description, location)."""
-    print(f"[SEARCH] query='{query}', limit={limit}")  # Debug
+    """Search properties by keyword, matching title/location words (fuzzy-friendly)."""
     conn = get_db()
     cursor = conn.cursor()
 
-    # Extract keywords (3+ chars, drop stopwords) so filler words like "de"/"en"
-    # don't false-match properties on sales questions ("precio de wapsell").
+    # Extract keywords (2+ chars, drop stopwords)
     _STOP = {
-        "los", "las", "una", "uno", "por", "que", "con", "del", "para", "como",
-        "cual", "cuales", "este", "esta", "esto", "tiene", "hay", "the", "and",
-        "for", "with", "what", "que", "una", "mas", "muy", "info", "sobre",
+        "lo", "la", "un", "el", "es", "de", "en", "o", "y", "a", "por", "que", "con",
+        "del", "para", "como", "cual", "este", "eso", "tiene", "hay", "the", "and",
+        "for", "with", "what", "una", "mas", "muy", "info", "sobre", "es", "al",
     }
     keywords = [
         w.lower() for w in query.split()
-        if len(w) >= 3 and w.lower() not in _STOP
+        if len(w) >= 2 and w.lower() not in _STOP
     ]
-    print(f"[SEARCH] keywords={keywords}")  # Debug
 
-    # Build WHERE clause for each keyword
+    # Match by word prefix (so "depto" matches "Departamento", "pal" matches "Palermo")
     results = []
     if keywords:
-        for keyword in keywords:
-            search_term = f"%{keyword}%"
-            # Use COLLATE NOCASE for case-insensitive search in SQLite
-            cursor.execute("""
-                SELECT id, title, description, type, price, bedrooms, location
-                FROM properties
-                WHERE title LIKE ? COLLATE NOCASE
-                   OR description LIKE ? COLLATE NOCASE
-                   OR location LIKE ? COLLATE NOCASE
-                   OR type LIKE ? COLLATE NOCASE
-                LIMIT ?
-            """, (search_term, search_term, search_term, search_term, limit))
+        cursor.execute(f"SELECT id, title, description, type, price, bedrooms, location FROM properties")
+        all_props = cursor.fetchall()
 
-            keyword_results = cursor.fetchall()
-            results.extend(keyword_results)
+        for kw in keywords:
+            for prop in all_props:
+                # Check if keyword is a prefix of any word in title/location
+                title_words = prop[1].lower().split()
+                location_words = prop[6].lower().split()
+                all_words = title_words + location_words
 
-            # Stop if we have enough results
+                if any(w.startswith(kw) for w in all_words):
+                    if prop not in results:
+                        results.append(prop)
+                    if len(results) >= limit:
+                        break
             if len(results) >= limit:
                 break
 
-    # Remove duplicates while preserving order
+    # Trim to limit
     seen = set()
     unique_results = []
     for r in results:
