@@ -1352,6 +1352,49 @@ async def get_messages(user_id: str = None):
 # --- Demo Funnel (Leads) Endpoints ---
 
 ADMIN_TOKEN = os.getenv("WAPSELL_ADMIN_TOKEN", "")
+ADMIN_EMAIL = os.getenv("WAPSELL_ADMIN_EMAIL", "")
+
+def notify_admin_of_lead(lead: dict, action: str = "captured"):
+    """Send admin an email notification when a lead is captured or verified.
+
+    lead: dict with keys {id, name, email, phone, company, detected_persona}
+    action: 'captured' or 'verified'
+    """
+    if not ADMIN_EMAIL or not RESEND_API_KEY:
+        return False
+    try:
+        persona = lead.get("detected_persona", "Unknown")
+        html = f"""
+        <h2>🎯 Nuevo lead {action}!</h2>
+        <p><strong>{lead.get('name', 'Sin nombre')}</strong></p>
+        <ul>
+            <li><strong>Email:</strong> {lead.get('email', '-')}</li>
+            <li><strong>Teléfono:</strong> {lead.get('phone', '-')}</li>
+            <li><strong>Empresa:</strong> {lead.get('company', '-')}</li>
+            <li><strong>Persona detectada:</strong> {persona}</li>
+        </ul>
+        <p><a href="https://wapsell.com/ventas">📊 Ver en el panel</a></p>
+        """
+        req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            method="POST",
+            data=json.dumps({
+                "from": RESEND_FROM,
+                "to": ADMIN_EMAIL,
+                "subject": f"[{action.upper()}] Lead: {lead.get('name', 'sin nombre')}",
+                "html": html,
+            }).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "User-Agent": "wapsell/1.0",
+            }
+        )
+        urllib.request.urlopen(req, timeout=5)
+        return True
+    except Exception as e:
+        logging.warning(f"[NOTIFY] failed to email admin: {str(e)}")
+        return False
 
 @app.post("/demo/session", response_model=DemoSessionOut, status_code=201)
 async def demo_session(request: Request):
@@ -1393,6 +1436,9 @@ async def demo_contact(request: Request, req: ContactRequest, demo_id: str = Non
         sent = send_verification_email(str(req.email), verify_url, lang)
         # Don't log the email (PII). The lead id is enough to trace.
         logging.info(f"[LEAD] captured {demo_id} email_sent={sent}")
+
+        # Notify admin of the captured lead
+        notify_admin_of_lead(lead, action="captured")
 
         resp = {"status": "captured", "lead_id": demo_id, "email_sent": sent}
         # Dev-only fallback: expose the link for end-to-end testing without an
@@ -1441,10 +1487,27 @@ async def demo_verify(token: str = None):
         "UPDATE leads SET email_verified = 1, verified_at = ? WHERE id = ?",
         (now, lead_id),
     )
+    cursor.execute(
+        "SELECT name, email, phone, company, detected_persona FROM leads WHERE id = ?",
+        (lead_id,)
+    )
+    lead_info = cursor.fetchone()
     conn.commit()
     conn.close()
     deal = promote_lead_to_deal(lead_id)
     logging.info(f"[VERIFY] lead {lead_id} verified -> deal {deal.get('id') if deal else None}")
+
+    # Notify admin of the verified lead
+    if lead_info:
+        notify_admin_of_lead({
+            "id": lead_id,
+            "name": lead_info[0],
+            "email": lead_info[1],
+            "phone": lead_info[2],
+            "company": lead_info[3],
+            "detected_persona": lead_info[4],
+        }, action="verified")
+
     return page(
         "¡Email verificado! 🎉",
         "Tu cotización quedó activa y te vamos a contactar por WhatsApp. ¡Gracias!",

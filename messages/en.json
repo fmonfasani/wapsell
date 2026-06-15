@@ -175,5 +175,11 @@
   },
   "wa": {
     "greeting": "Hi, I saw the {brand} website and wanted to learn how the bot works for my real estate team."
+  },
+  "cookies": {
+    "message": "We use cookies to understand how you use the site and offer the best experience. Your data is never shared.",
+    "link": "Learn more",
+    "accept": "Accept",
+    "reject": "Reject"
   }
 }

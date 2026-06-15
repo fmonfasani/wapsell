@@ -175,5 +175,11 @@
   },
   "wa": {
     "greeting": "Hola, vi la web de {brand} y quería saber cómo funciona el bot para mi inmobiliaria."
+  },
+  "cookies": {
+    "message": "Usamos cookies para analizar cómo usas el sitio y ofrecerte la mejor experiencia. Tus datos nunca se comparten.",
+    "link": "Saber más",
+    "accept": "Aceptar",
+    "reject": "Rechazar"
   }
 }
