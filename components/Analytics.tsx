@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 export function Analytics() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     const w = typeof window !== "undefined" ? (window as any) : null;
@@ -41,12 +40,11 @@ export function Analytics() {
       w.fbq("track", "PageView");
     }
 
-    // GA page view
+    // GA page view (just use pathname, no search params for static generation)
     if (GA_ID && w.gtag) {
-      const url = pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
-      w.gtag("event", "page_view", { page_path: url });
+      w.gtag("event", "page_view", { page_path: pathname });
     }
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   return null;
 }
