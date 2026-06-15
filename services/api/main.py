@@ -21,9 +21,10 @@ from pydantic import BaseModel, EmailStr, field_validator
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Configure logging. Level is env-configurable (default INFO in prod; set
+# WAPSELL_LOG_LEVEL=DEBUG locally). Avoid DEBUG in production.
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=getattr(logging, os.getenv("WAPSELL_LOG_LEVEL", "INFO").upper(), logging.INFO),
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('api.log'),
@@ -45,6 +46,9 @@ from buyer_profile_manager import BuyerProfileManager
 # Wapsell sales agent knowledge base (the demo sells Wapsell itself).
 import wapsell_sales
 
+from integrations.mercadolibre.db import init_ml_tables
+from integrations.mercadolibre.router import router as mercadolibre_router
+
 try:
     import openpyxl
 except ImportError:
@@ -61,6 +65,12 @@ except ImportError:
 # volume (/data/wapsell.db) — keeps the SQLite file persistent across rebuilds
 # without a volume shadowing the app code. Defaults to local file for dev.
 DB_PATH = os.getenv("WAPSELL_DB_PATH", os.path.join(os.path.dirname(__file__), "wapsell.db"))
+
+# Environment flags. In production set WAPSELL_ENV=production (enables Secure
+# cookies and hides the dev-only verify_url fallback).
+WAPSELL_ENV = os.getenv("WAPSELL_ENV", "production")
+IS_PROD = WAPSELL_ENV == "production"
+COOKIE_SECURE = os.getenv("WAPSELL_COOKIE_SECURE", "true" if IS_PROD else "false") == "true"
 
 def seed_properties(cursor):
     """Seed database with 10 demo properties."""
@@ -261,12 +271,26 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         seed_properties(cursor)
 
+    init_ml_tables(conn)
+
     conn.commit()
     conn.close()
 
 def get_db():
-    """Get database connection."""
-    return sqlite3.connect(DB_PATH)
+    """Get a SQLite connection hardened for concurrency.
+
+    WAL + busy_timeout let concurrent readers/writers coexist instead of
+    failing with 'database is locked'. (We deliberately do NOT enable
+    PRAGMA foreign_keys: chat_messages.user_id holds demo-lead ids that are
+    not in `users`, so enforcing FKs would reject demo inserts.)
+    """
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+    except sqlite3.OperationalError:
+        pass
+    return conn
 
 # --- Email (Resend) ---
 # Activates automatically once RESEND_API_KEY is set in the env. Until then,
@@ -406,13 +430,35 @@ class ChatMessageOut(BaseModel):
 
 # --- Auth Utils ---
 
+_PBKDF2_ROUNDS = 240000
+
 def hash_password(password: str) -> str:
-    """Hash password using SHA256."""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Salted PBKDF2-HMAC-SHA256 (stdlib, no extra deps).
+
+    Format: 'pbkdf2$<rounds>$<salt_hex>$<hash_hex>'.
+    """
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, _PBKDF2_ROUNDS)
+    return f"pbkdf2${_PBKDF2_ROUNDS}${salt.hex()}${dk.hex()}"
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """Verify password against hash."""
-    return hash_password(password) == password_hash
+    """Verify against PBKDF2 hashes; still accepts legacy SHA-256 (so old
+    accounts keep working — re-hash them on next login via needs_rehash)."""
+    try:
+        if password_hash.startswith("pbkdf2$"):
+            _, rounds, salt_hex, expected = password_hash.split("$")
+            dk = hashlib.pbkdf2_hmac("sha256", password.encode(),
+                                     bytes.fromhex(salt_hex), int(rounds))
+            return secrets.compare_digest(dk.hex(), expected)
+        # Legacy: unsalted SHA-256
+        return secrets.compare_digest(
+            hashlib.sha256(password.encode()).hexdigest(), password_hash)
+    except Exception:
+        return False
+
+def needs_rehash(password_hash: str) -> bool:
+    """True for legacy hashes that should be upgraded to PBKDF2 on login."""
+    return not password_hash.startswith("pbkdf2$")
 
 def generate_session_token() -> str:
     """Generate secure session token."""
@@ -916,6 +962,8 @@ app = FastAPI()
 # Initialize database
 init_db()
 
+app.include_router(mercadolibre_router)
+
 # Initialize Hermes/Wapsell client for RAG with OpenRouter LLM
 def init_hermes_client():
     """Initialize WapsellClient with OpenRouter LLM (gpt-4o-mini) + properties in Hindsight."""
@@ -1026,6 +1074,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- Lightweight in-memory rate limiting (per IP, sliding window) ---
+# Protects public endpoints that cost money or can be abused (email, LLM).
+# In-process only (fine for a single uvicorn worker); for multi-worker use a
+# shared store (Redis) or nginx limit_req.
+from collections import deque
+
+_rate_buckets: dict[str, deque] = {}
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def rate_limit(request: Request, key: str, limit: int, window_s: int):
+    """Allow `limit` requests per `window_s` seconds per IP, else HTTP 429."""
+    ip = _client_ip(request)
+    bucket = _rate_buckets.setdefault(f"{key}:{ip}", deque())
+    now = time.time()
+    while bucket and bucket[0] <= now - window_s:
+        bucket.popleft()
+    if len(bucket) >= limit:
+        raise HTTPException(status_code=429, detail="Demasiadas solicitudes. Probá en un momento.")
+    bucket.append(now)
+
 # --- Endpoints ---
 
 @app.post("/auth/register", response_model=UserOut, status_code=201)
@@ -1057,7 +1130,7 @@ async def register(req: RegisterRequest, response: Response):
             key="wapsell_session",
             value=token,
             httponly=True,
-            secure=False,  # Set to True in production with HTTPS
+            secure=COOKIE_SECURE,  # True in prod (HTTPS) via WAPSELL_ENV
             samesite="lax",
             expires=expires_at,
             path="/",
@@ -1093,6 +1166,13 @@ async def login(req: LoginRequest, response: Response):
 
         user_id = user_row[0]
 
+        # Upgrade legacy SHA-256 hashes to PBKDF2 on successful login.
+        if needs_rehash(user_row[2]):
+            c2 = get_db(); cur2 = c2.cursor()
+            cur2.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                         (hash_password(req.password), user_id))
+            c2.commit(); c2.close()
+
         # Create session
         token, expires_at = create_session(user_id)
 
@@ -1101,7 +1181,7 @@ async def login(req: LoginRequest, response: Response):
             key="wapsell_session",
             value=token,
             httponly=True,
-            secure=False,  # Set to True in production with HTTPS
+            secure=COOKIE_SECURE,  # True in prod (HTTPS) via WAPSELL_ENV
             samesite="lax",
             expires=expires_at,
             path="/",
@@ -1141,8 +1221,9 @@ async def logout(response: Response):
 # --- Chat Endpoints ---
 
 @app.post("/chat/message", response_model=ChatResponse)
-async def chat_message(req: ChatRequest, user_id: str = None, lang: str = "es"):
+async def chat_message(request: Request, req: ChatRequest, user_id: str = None, lang: str = "es"):
     """Send a message and get adaptive persona-aware response with RAG."""
+    rate_limit(request, "chat_message", limit=40, window_s=60)
     try:
         if not user_id:
             raise HTTPException(status_code=401, detail="user_id required")
@@ -1266,8 +1347,9 @@ async def get_messages(user_id: str = None):
 ADMIN_TOKEN = os.getenv("WAPSELL_ADMIN_TOKEN", "")
 
 @app.post("/demo/session", response_model=DemoSessionOut, status_code=201)
-async def demo_session():
+async def demo_session(request: Request):
     """Create an anonymous lead for a new demo visitor. No login required."""
+    rate_limit(request, "demo_session", limit=20, window_s=60)
     try:
         demo_id = create_lead(source="demo")
         logging.info(f"[LEAD] new anonymous session {demo_id}")
@@ -1277,11 +1359,13 @@ async def demo_session():
         raise HTTPException(status_code=500, detail="Could not start demo session")
 
 @app.post("/demo/contact")
-async def demo_contact(req: ContactRequest, demo_id: str = None, lang: str = "es"):
+async def demo_contact(request: Request, req: ContactRequest, demo_id: str = None, lang: str = "es"):
     """Capture a lead's contact + send the email-verification link.
 
     On verification (GET /demo/verify) the lead is promoted to a Capa-2 deal.
     """
+    # Strict: this triggers an outbound email — cap hard to prevent abuse.
+    rate_limit(request, "demo_contact", limit=6, window_s=3600)
     try:
         if not demo_id:
             raise HTTPException(status_code=400, detail="demo_id required")
@@ -1300,12 +1384,13 @@ async def demo_contact(req: ContactRequest, demo_id: str = None, lang: str = "es
         set_verify_token(demo_id, token)
         verify_url = f"{PUBLIC_API_URL}/demo/verify?token={token}"
         sent = send_verification_email(str(req.email), verify_url, lang)
-        logging.info(f"[LEAD] captured {demo_id} <{req.email}> email_sent={sent}")
+        # Don't log the email (PII). The lead id is enough to trace.
+        logging.info(f"[LEAD] captured {demo_id} email_sent={sent}")
 
         resp = {"status": "captured", "lead_id": demo_id, "email_sent": sent}
-        # Dev fallback: until RESEND_API_KEY is set, expose the link so the flow
-        # is testable end-to-end (no email provider yet).
-        if not sent:
+        # Dev-only fallback: expose the link for end-to-end testing without an
+        # email provider. NEVER in production (would let anyone self-verify).
+        if not sent and not IS_PROD:
             resp["verify_url"] = verify_url
         return resp
     except HTTPException:
@@ -1494,8 +1579,9 @@ async def get_pricing():
     }
 
 @app.post("/quote")
-async def post_quote(req: QuoteRequest):
+async def post_quote(request: Request, req: QuoteRequest):
     """Automatic quote from the table by plan and/or monthly conversations."""
+    rate_limit(request, "quote", limit=30, window_s=60)
     data, text = wapsell_sales.auto_quote(
         conversations=req.conversations, plan=req.plan, lang=req.lang
     )

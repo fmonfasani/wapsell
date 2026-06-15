@@ -1,0 +1,1 @@
+# External integrations (MercadoLibre, etc.)

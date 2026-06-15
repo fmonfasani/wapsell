@@ -14,6 +14,7 @@ COPY main.py .
 COPY buyer_personas.py .
 COPY buyer_profile_manager.py .
 COPY wapsell_sales.py .
+COPY integrations/ ./integrations/
 
 # Data dir for the persistent SQLite volume (WAPSELL_DB_PATH=/data/wapsell.db).
 RUN mkdir -p /data
