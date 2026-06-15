@@ -17,8 +17,8 @@ export function CookieBanner() {
 
   const handleAccept = () => {
     localStorage.setItem("wapsell_cookie_consent", "true");
-    if (typeof window.gtag !== "undefined") {
-      window.gtag("event", "cookies_accepted");
+    if (typeof window !== "undefined" && (window as any).gtag) {
+      (window as any).gtag("event", "cookies_accepted");
     }
     setShow(false);
   };
