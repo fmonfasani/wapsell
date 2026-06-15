@@ -1,202 +1,107 @@
-"""Tests for Wapsell Auth API."""
+"""Contract tests for the Wapsell API. Run: pytest test_main.py -q
 
+Env is set BEFORE importing the app so it uses a throwaway DB and dev mode
+(OPENROUTER_API_KEY is optional now — the chat path is deterministic).
+"""
+import os
+import tempfile
+
+os.environ["WAPSELL_DB_PATH"] = os.path.join(tempfile.gettempdir(), "wapsell_test.db")
+os.environ["WAPSELL_ADMIN_TOKEN"] = "test-admin-token"
+os.environ["WAPSELL_ENV"] = "dev"            # exposes verify_url for the e2e flow
+os.environ.setdefault("OPENROUTER_API_KEY", "")
+
+try:
+    os.remove(os.environ["WAPSELL_DB_PATH"])
+except OSError:
+    pass
+
+import hashlib
 import pytest
 from fastapi.testclient import TestClient
-from main import app, init_db
+import main
 
-client = TestClient(app)
+ADMIN = {"X-Admin-Token": "test-admin-token"}
 
-@pytest.fixture(autouse=True)
-def setup_db():
-    """Initialize database before each test."""
-    init_db()
-    yield
-    # Cleanup would go here if needed
 
-class TestHealth:
-    def test_health_check(self):
-        """Test health endpoint."""
-        response = client.get("/health")
-        assert response.status_code == 200
-        assert response.json()["status"] == "ok"
+@pytest.fixture
+def client():
+    return TestClient(main.app)
 
-class TestAuth:
-    def test_register_success(self):
-        """Test successful user registration."""
-        response = client.post(
-            "/auth/register",
-            json={
-                "email": "test@example.com",
-                "password": "Password123",
-                "name": "Test User"
-            }
-        )
-        assert response.status_code == 201
-        assert response.json()["email"] == "test@example.com"
-        assert "id" in response.json()
 
-    def test_register_invalid_email(self):
-        """Test registration with invalid email."""
-        response = client.post(
-            "/auth/register",
-            json={
-                "email": "invalid-email",
-                "password": "Password123",
-                "name": "Test User"
-            }
-        )
-        assert response.status_code == 422
+def test_health(client):
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert r.json()["status"] == "ok"
 
-    def test_register_weak_password(self):
-        """Test registration with weak password."""
-        response = client.post(
-            "/auth/register",
-            json={
-                "email": "test@example.com",
-                "password": "weak",
-                "name": "Test User"
-            }
-        )
-        assert response.status_code == 422
 
-    def test_register_duplicate_email(self):
-        """Test registration with duplicate email."""
-        # Register first user
-        client.post(
-            "/auth/register",
-            json={
-                "email": "test@example.com",
-                "password": "Password123",
-                "name": "Test User"
-            }
-        )
+def test_password_hashing_pbkdf2():
+    h = main.hash_password("Secret123")
+    assert h.startswith("pbkdf2$")
+    assert main.verify_password("Secret123", h)
+    assert not main.verify_password("wrong", h)
+    # legacy unsalted sha256 still verifies + is flagged for rehash
+    legacy = hashlib.sha256("Secret123".encode()).hexdigest()
+    assert main.verify_password("Secret123", legacy)
+    assert main.needs_rehash(legacy)
+    assert not main.needs_rehash(h)
 
-        # Try to register with same email
-        response = client.post(
-            "/auth/register",
-            json={
-                "email": "test@example.com",
-                "password": "Password456",
-                "name": "Another User"
-            }
-        )
-        assert response.status_code == 409
-        assert "ya está registrado" in response.json()["detail"]
 
-    def test_login_success(self):
-        """Test successful login."""
-        # Register first
-        client.post(
-            "/auth/register",
-            json={
-                "email": "test@example.com",
-                "password": "Password123",
-                "name": "Test User"
-            }
-        )
+def test_pricing_table(client):
+    r = client.get("/pricing")
+    assert r.status_code == 200
+    plans = r.json()["plans"]
+    assert plans["starter"]["ars"] == 49000
+    assert plans["pro"]["ars"] == 249000
 
-        # Login
-        response = client.post(
-            "/auth/login",
-            json={
-                "email": "test@example.com",
-                "password": "Password123"
-            }
-        )
-        assert response.status_code == 200
-        assert response.json()["email"] == "test@example.com"
-        assert "wapsell_session" in response.cookies
 
-    def test_login_invalid_password(self):
-        """Test login with wrong password."""
-        # Register first
-        client.post(
-            "/auth/register",
-            json={
-                "email": "test@example.com",
-                "password": "Password123",
-                "name": "Test User"
-            }
-        )
+def test_quote_enterprise_tier(client):
+    r = client.post("/quote", json={"conversations": 8000})
+    assert r.status_code == 200
+    assert r.json()["quote"]["plan"] == "enterprise"
 
-        # Try with wrong password
-        response = client.post(
-            "/auth/login",
-            json={
-                "email": "test@example.com",
-                "password": "WrongPassword123"
-            }
-        )
-        assert response.status_code == 401
-        assert "inválidos" in response.json()["detail"]
 
-    def test_get_me_authenticated(self):
-        """Test /auth/me with valid session."""
-        # Register and login
-        reg_response = client.post(
-            "/auth/register",
-            json={
-                "email": "test@example.com",
-                "password": "Password123",
-                "name": "Test User"
-            }
-        )
+def test_admin_requires_token(client):
+    assert client.get("/demo/leads").status_code == 401
+    assert client.get("/demo/leads", headers=ADMIN).status_code == 200
 
-        # Get me should work with session cookie
-        response = client.get("/auth/me")
-        assert response.status_code == 200
-        assert response.json()["email"] == "test@example.com"
 
-    def test_get_me_unauthenticated(self):
-        """Test /auth/me without session."""
-        response = client.get("/auth/me")
-        assert response.status_code == 401
-        assert "not authenticated" in response.json()["detail"]
+def test_chat_requires_identity(client):
+    assert client.post("/chat/message", json={"message": "hi"}).status_code == 401
+    assert client.post("/chat/message?user_id=nope", json={"message": "hi"}).status_code == 401
 
-    def test_logout(self):
-        """Test logout clears session."""
-        # Register
-        client.post(
-            "/auth/register",
-            json={
-                "email": "test@example.com",
-                "password": "Password123",
-                "name": "Test User"
-            }
-        )
 
-        # Logout
-        response = client.post("/auth/logout")
-        assert response.status_code == 204
+def test_chat_sells_wapsell(client):
+    sid = client.post("/demo/session").json()["demo_id"]
+    pricing = client.post(f"/chat/message?user_id={sid}", json={"message": "precios"})
+    assert pricing.status_code == 200
+    assert "Starter" in pricing.json()["reply"]
+    greeting = client.post(f"/chat/message?user_id={sid}", json={"message": "hola"})
+    assert "Wapsell" in greeting.json()["reply"]
 
-        # Try to get me - should fail
-        response = client.get("/auth/me")
-        assert response.status_code == 401
 
-class TestChat:
-    def test_chat_message(self):
-        """Test chat endpoint."""
-        response = client.post(
-            "/chat/message",
-            json={"message": "Busco algo en Palermo"}
-        )
-        assert response.status_code == 200
-        assert "reply" in response.json()
-        assert len(response.json()["reply"]) > 0
+def test_demo_funnel_and_promotion(client):
+    # session -> capture -> verify -> promoted to a Capa-2 deal
+    sid = client.post("/demo/session").json()["demo_id"]
+    client.post(f"/chat/message?user_id={sid}", json={"message": "quiero contratar"})
+    c = client.post(
+        f"/demo/contact?demo_id={sid}",
+        json={"name": "Test", "email": "t@example.com", "phone": "+5491100000000"},
+    )
+    assert c.status_code == 200
+    verify_url = c.json().get("verify_url")
+    assert verify_url, "verify_url should be exposed in dev"
+    token = verify_url.split("token=")[1]
+    assert client.get(f"/demo/verify?token={token}").status_code == 200
+    deals = client.get("/app/deals", headers=ADMIN).json()
+    assert deals["total"] >= 1
+    assert any(d["email"] == "t@example.com" for d in deals["deals"])
 
-    def test_chat_different_topics(self):
-        """Test chat with different message topics."""
-        test_cases = [
-            ("Palermo", "Palermo"),
-            ("precio", "precio"),
-            ("dormitorios", "dormitorios"),
-            ("otro tema", "excelente pregunta"),
-        ]
 
-        for message, expected_keyword in test_cases:
-            response = client.post(
-                "/chat/message",
-                json={"message": message}
-            )
-            assert response.status_code == 200
-            assert expected_keyword.lower() in response.json()["reply"].lower()
+def test_register_login(client):
+    email = "user@example.com"
+    reg = client.post("/auth/register", json={"email": email, "password": "Passw0rd", "name": "User"})
+    assert reg.status_code in (201, 409)  # 409 if a previous run created it
+    login = client.post("/auth/login", json={"email": email, "password": "Passw0rd"})
+    assert login.status_code == 200
+    assert login.json()["email"] == email

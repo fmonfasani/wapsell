@@ -1054,7 +1054,14 @@ SIEMPRE que tengas datos disponibles, recomendarás propiedades específicas."""
 
     return client
 
-hermes_client = init_hermes_client()
+# Tolerate a missing OPENROUTER_API_KEY (e.g. CI/tests, or if the key is
+# briefly unset) — the chat path is deterministic and doesn't need the LLM;
+# only /debug/hindsight uses hermes_client, and it guards for None.
+try:
+    hermes_client = init_hermes_client()
+except Exception as _e:
+    logging.warning(f"Hermes client unavailable (continuing without LLM): {_e}")
+    hermes_client = None
 
 # Initialize Buyer Profile Manager for adaptive personas and learning
 buyer_profile_manager = BuyerProfileManager(db_path=DB_PATH)
@@ -1724,8 +1731,11 @@ Monoambiente Recoleta,Moderno y equipado,alquiler,1200,1,1,Recoleta,Av. Santa Fe
     }
 
 @app.get("/debug/hindsight")
-async def debug_hindsight():
-    """Debug endpoint to check Hindsight state."""
+async def debug_hindsight(x_admin_token: Optional[str] = Header(None)):
+    """Debug endpoint to check Hindsight state. Admin-only (leaks internal facts)."""
+    _require_admin(x_admin_token)
+    if hermes_client is None:
+        return {"error": "hermes client unavailable (no LLM key)"}
     try:
         # Test query
         results = hermes_client.hindsight.query(text="Palermo", tenant_id="demo", top_k=3)
