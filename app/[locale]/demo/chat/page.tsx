@@ -89,7 +89,7 @@ function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export default function DemoChatPage() {
+function ChatContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const locale = (params?.locale === "en" ? "en" : "es") as "es" | "en";
@@ -431,5 +431,13 @@ function CaptureCard({
         </button>
       </div>
     </div>
+  );
+}
+
+export default function DemoChatPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-cream flex items-center justify-center">Cargando...</div>}>
+      <ChatContent />
+    </Suspense>
   );
 }
