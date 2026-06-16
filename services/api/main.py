@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr, field_validator
 
 # Load environment variables
@@ -1896,13 +1897,34 @@ class CatalogExtractRequest(BaseModel):
     prospect_id: str
 
 
+def _do_extract(tokko_url: str, prospect_id: str, prospect_name: str, db_path: str) -> tuple:
+    """Blocking extraction function (runs in threadpool)."""
+    extractor = TokkoExtractor(tokko_url, timeout=15)
+
+    count = extractor.get_property_count()
+    logging.info(f"[EXTRACT] Expected ~{count} properties")
+
+    urls = extractor.get_property_listing_urls(max_pages=10)
+    logging.info(f"[EXTRACT] Found {len(urls)} property URLs")
+
+    properties = extractor.extract_all()
+    logging.info(f"[EXTRACT] Extracted {len(properties)} properties")
+
+    # Convert to RAG format
+    rag_properties = extractor.to_rag_format(properties)
+
+    # Load to DB
+    loader = CatalogLoader(db_path)
+    loaded = loader.load_rag_format(prospect_id, rag_properties)
+    loader.close()
+
+    logging.info(f"[EXTRACT] ✓ Loaded {loaded} properties for {prospect_name}")
+    return loaded, prospect_name
+
+
 @app.post("/catalogs/extract")
 async def extract_catalog(req: CatalogExtractRequest, x_admin_token: Optional[str] = Header(None)):
-    """Extract a Tokko catalog and load to tenant_catalogs table. Admin-only.
-
-    Background job: extracts ~1000 properties, may take 2-5 minutes.
-    Returns immediately with a task ID; check /catalogs/extract/{task_id} for progress.
-    """
+    """Extract a Tokko catalog and load to tenant_catalogs table. Admin-only."""
     _require_admin(x_admin_token)
 
     try:
@@ -1921,33 +1943,16 @@ async def extract_catalog(req: CatalogExtractRequest, x_admin_token: Optional[st
 
         logging.info(f"[EXTRACT] Starting catalog extraction for {prospect[0]} ({prospect_id})")
 
-        # Extract (this runs synchronously for now; in prod, use Celery/Redis)
-        extractor = TokkoExtractor(tokko_url, timeout=15)
-
-        count = extractor.get_property_count()
-        logging.info(f"[EXTRACT] Expected ~{count} properties")
-
-        urls = extractor.get_property_listing_urls(max_pages=10)
-        logging.info(f"[EXTRACT] Found {len(urls)} property URLs")
-
-        properties = extractor.extract_all()
-        logging.info(f"[EXTRACT] Extracted {len(properties)} properties")
-
-        # Convert to RAG format
-        rag_properties = extractor.to_rag_format(properties)
-
-        # Load to DB
+        # Run in threadpool to avoid async/sync conflicts with Playwright
         db_path = os.getenv("WAPSELL_DB_PATH", os.path.join(os.path.dirname(__file__), "wapsell.db"))
-        loader = CatalogLoader(db_path)
-        loaded = loader.load_rag_format(prospect_id, rag_properties)
-        loader.close()
-
-        logging.info(f"[EXTRACT] ✓ Loaded {loaded} properties for {prospect[0]}")
+        loaded, prospect_name = await run_in_threadpool(
+            _do_extract, tokko_url, prospect_id, prospect[0], db_path
+        )
 
         return {
             "status": "success",
             "prospect_id": prospect_id,
-            "prospect_name": prospect[0],
+            "prospect_name": prospect_name,
             "properties_loaded": loaded,
             "message": f"Loaded {loaded} properties from {tokko_url}"
         }
