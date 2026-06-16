@@ -1139,7 +1139,7 @@ buyer_profile_manager = BuyerProfileManager(db_path=DB_PATH)
 # origins. (allow_origins=["*"] + allow_credentials=True is rejected by browsers.)
 CORS_ORIGINS = os.getenv(
     "WAPSELL_CORS_ORIGINS",
-    "https://wapsell.com,https://www.wapsell.com,http://localhost:3000",
+    "https://wapsell.com,https://www.wapsell.com,https://app.wapsell.com,http://localhost:3000",
 ).split(",")
 app.add_middleware(
     CORSMiddleware,
