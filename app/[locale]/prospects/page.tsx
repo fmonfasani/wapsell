@@ -10,7 +10,7 @@ export default function ProspectsPage() {
   const t = useTranslations();
   const locale = useLocale();
 
-  const [prospects, setProspects] = useState<any[]>([]);
+  const [prospects, setProspects] = useState<any>({ prospects: [] });
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tier, setTier] = useState<string>("all");
@@ -171,7 +171,7 @@ export default function ProspectsPage() {
             )}
           </div>
 
-          {prospects.count === 0 && !loading && (
+          {(!prospects.prospects || prospects.prospects.length === 0) && !loading && (
             <div className="text-center p-8 text-ink/60">Sin resultados</div>
           )}
         </div>
