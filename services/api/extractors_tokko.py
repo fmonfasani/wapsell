@@ -212,7 +212,7 @@ class TokkoExtractor:
         return properties
 
     def extract_all(self) -> List[Dict]:
-        """Extract all properties. Falls back to Playwright if requests fails."""
+        """Extract all properties from static Tokko site."""
         count = self.get_property_count()
         logger.info(f"Expected {count} properties")
 
@@ -224,11 +224,6 @@ class TokkoExtractor:
             details = self.get_property_details(url)
             if details:
                 properties.append(details)
-
-        # Fallback to Playwright if requests yielded nothing
-        if len(properties) == 0 and HAS_PLAYWRIGHT:
-            logger.info("No properties found with requests. Trying Playwright...")
-            properties = self.extract_with_playwright()
 
         return properties
 
