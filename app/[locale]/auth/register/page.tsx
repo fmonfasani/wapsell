@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 
 interface FormErrors {
@@ -13,6 +13,8 @@ interface FormErrors {
 
 export default function RegisterPage() {
   const router = useRouter();
+  const params = useParams();
+  const locale = (params?.locale as string) || "es";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -88,7 +90,7 @@ export default function RegisterPage() {
         throw new Error(data.detail || "Error al registrarse");
       }
 
-      router.push("/demo");
+      router.push(`/${locale}/app/onboarding`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrarse");
     } finally {

@@ -200,8 +200,15 @@ def init_db():
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             business_name TEXT,
+            whatsapp TEXT,
+            property_count INTEGER,
+            location TEXT,
+            tokko_url TEXT,
+            catalog_status TEXT DEFAULT 'pending',
             plan TEXT DEFAULT 'starter',
             status TEXT DEFAULT 'trial',
+            usage_leads INTEGER DEFAULT 0,
+            usage_limit INTEGER DEFAULT 50,
             created_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES app_users(id)
         )
@@ -268,6 +275,13 @@ def init_db():
     _add_col("leads", "email_verified", "INTEGER DEFAULT 0")
     _add_col("leads", "verified_at", "TEXT")
     _add_col("conversions", "app_deal_id", "TEXT")
+    _add_col("app_accounts", "whatsapp", "TEXT")
+    _add_col("app_accounts", "property_count", "INTEGER")
+    _add_col("app_accounts", "location", "TEXT")
+    _add_col("app_accounts", "tokko_url", "TEXT")
+    _add_col("app_accounts", "catalog_status", "TEXT DEFAULT 'pending'")
+    _add_col("app_accounts", "usage_leads", "INTEGER DEFAULT 0")
+    _add_col("app_accounts", "usage_limit", "INTEGER DEFAULT 50")
 
     conn.commit()
 
@@ -410,6 +424,17 @@ class ContactRequest(BaseModel):
 class DemoSessionOut(BaseModel):
     demo_id: str
 
+class PropertySourceRequest(BaseModel):
+    tokko_url: str
+    whatsapp: Optional[str] = None
+    property_count: Optional[int] = None
+    location: Optional[str] = None
+
+class PropertySourceOut(BaseModel):
+    account_id: str
+    catalog_status: str
+    demo_url: str
+
 class QuoteRequest(BaseModel):
     plan: Optional[str] = None
     conversations: Optional[int] = None
@@ -509,6 +534,41 @@ def verify_session(token: str) -> Optional[str]:
         return None
 
     return user_id
+
+def check_account_usage(account_id: str) -> tuple[bool, str]:
+    """
+    Check if an account is within its usage limits.
+    Returns: (is_allowed, reason)
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT status, usage_leads, usage_limit
+        FROM app_accounts WHERE id = ?
+    """, (account_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return False, "Account not found"
+
+    status, usage_leads, usage_limit = row
+
+    # If account is paid, allow unlimited
+    if status == "active":
+        return True, "Account is active"
+
+    # If in trial, check against limit
+    if status == "trial":
+        current = usage_leads or 0
+        limit = usage_limit or 50  # Default trial is 50 leads
+        if current >= limit:
+            return False, f"Trial limit reached ({limit} leads)"
+        return True, f"Trial active ({current}/{limit} leads)"
+
+    # Default deny
+    return False, f"Account status: {status}"
+
 
 def get_user_by_id(user_id: str) -> Optional[tuple]:
     """Get user by ID."""
@@ -1240,6 +1300,7 @@ async def chat_message(request: Request, req: ChatRequest, user_id: str = None, 
     """Send a message and get adaptive persona-aware response with RAG.
 
     prospect_id (optional): if set, search that prospect's catalog instead of demo properties.
+    If prospect_id is provided and is an account (registered user), check usage limits.
     """
     rate_limit(request, "chat_message", limit=40, window_s=60)
     try:
@@ -1249,6 +1310,15 @@ async def chat_message(request: Request, req: ChatRequest, user_id: str = None, 
         # Identity can be a registered user OR a demo lead.
         if not get_identity(user_id):
             raise HTTPException(status_code=401, detail="Unknown identity")
+
+        # If prospect_id is provided and it's an app account, check usage
+        if prospect_id:
+            is_allowed, reason = check_account_usage(prospect_id)
+            if not is_allowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Account limit reached: {reason}. Upgrade to continue."
+                )
 
         # Save user message
         save_chat_message(user_id, "user", req.message)
@@ -1906,6 +1976,259 @@ class CatalogExtractRequest(BaseModel):
     """Request to extract a Tokko catalog."""
     tokko_url: str
     prospect_id: str
+
+
+@app.post("/onboarding/property-source", response_model=PropertySourceOut, status_code=201)
+async def onboarding_property_source(req: PropertySourceRequest, request: Request):
+    """
+    Onboarding step 2: User provides their Tokko URL and property info.
+
+    Captures lead info, initiates partial extraction (20 props for quick demo),
+    and returns demo URL.
+    """
+    try:
+        # Get user_id from session
+        token = request.cookies.get("wapsell_session")
+        user_id = verify_session(token)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        # Get or create app_account for this user
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM app_accounts WHERE user_id = ?", (user_id,))
+        account_row = cursor.fetchone()
+
+        now = datetime.now(UTC).isoformat()
+
+        if not account_row:
+            # Create new account
+            account_id = secrets.token_urlsafe(16)
+            cursor.execute("""
+                INSERT INTO app_accounts
+                (id, user_id, tokko_url, whatsapp, property_count, location,
+                 catalog_status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (account_id, user_id, req.tokko_url, req.whatsapp,
+                  req.property_count, req.location, 'extracting', now))
+        else:
+            # Update existing account
+            account_id = account_row[0]
+            cursor.execute("""
+                UPDATE app_accounts
+                SET tokko_url = ?, whatsapp = ?, property_count = ?,
+                    location = ?, catalog_status = ?
+                WHERE id = ?
+            """, (req.tokko_url, req.whatsapp, req.property_count,
+                  req.location, 'extracting', account_id))
+
+        conn.commit()
+        conn.close()
+
+        # Launch partial extraction in background
+        db_path = os.getenv("WAPSELL_DB_PATH", os.path.join(os.path.dirname(__file__), "wapsell.db"))
+        await run_in_threadpool(
+            _do_extract_partial, req.tokko_url, account_id, db_path
+        )
+
+        logging.info(f"[ONBOARDING] Initiated partial extraction for account {account_id}")
+
+        demo_url = f"https://wapsell.com/demo/chat?prospect={account_id}"
+        return PropertySourceOut(
+            account_id=account_id,
+            catalog_status="extracting",
+            demo_url=demo_url
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[ONBOARDING] Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Onboarding failed: {str(e)}")
+
+
+@app.get("/onboarding/status/{account_id}")
+async def onboarding_status(account_id: str, request: Request):
+    """Get extraction status for an account."""
+    try:
+        # Get user_id from session
+        token = request.cookies.get("wapsell_session")
+        user_id = verify_session(token)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        # Verify account belongs to user
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT catalog_status, property_count FROM app_accounts WHERE id = ? AND user_id = ?",
+            (account_id, user_id)
+        )
+        account = cursor.fetchone()
+        conn.close()
+
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+
+        status, prop_count = account
+
+        # Get property count from tenant_catalogs
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM tenant_catalogs WHERE prospect_id = ?",
+            (account_id,)
+        )
+        loaded = cursor.fetchone()[0]
+        conn.close()
+
+        return {
+            "account_id": account_id,
+            "status": status,
+            "properties_loaded": loaded,
+            "properties_total": prop_count or "unknown"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[STATUS] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _do_extract_partial(tokko_url: str, account_id: str, db_path: str) -> int:
+    """Extract first 20 properties from Tokko site (fast partial extraction)."""
+    try:
+        extractor = TokkoExtractor(tokko_url, timeout=15)
+
+        # Get up to 20 property URLs
+        urls = extractor.get_property_listing_urls(max_pages=2, max_properties=20)
+        logging.info(f"[PARTIAL_EXTRACT] Found {len(urls)} property URLs")
+
+        # Extract details
+        properties = []
+        for url in urls:
+            details = extractor.get_property_details(url)
+            if details:
+                properties.append(details)
+
+        logging.info(f"[PARTIAL_EXTRACT] Extracted {len(properties)} property details")
+
+        # Convert to RAG format
+        rag_properties = extractor.to_rag_format(properties)
+
+        # Load to DB
+        loader = CatalogLoader(db_path)
+        loaded = loader.load_rag_format(account_id, rag_properties)
+        loader.close()
+
+        # Update account status and get user email for notification
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE app_accounts SET catalog_status = ? WHERE id = ?",
+            ("ready", account_id)
+        )
+        # Get user info for email
+        cursor.execute("""
+            SELECT u.email, u.name, a.business_name
+            FROM app_accounts a
+            JOIN app_users u ON u.id = a.user_id
+            WHERE a.id = ?
+        """, (account_id,))
+        user_row = cursor.fetchone()
+        conn.commit()
+        conn.close()
+
+        logging.info(f"[PARTIAL_EXTRACT] ✓ Loaded {loaded} properties for {account_id}")
+
+        # Send "ready" email if we have the user's info
+        if user_row and RESEND_API_KEY:
+            email, name, business_name = user_row
+            demo_url = f"https://wapsell.com/demo/chat?prospect={account_id}"
+            lang = "es"  # Default to Spanish
+            send_demo_ready_email(email, name or business_name or "Usuario", demo_url, lang)
+
+        return loaded
+
+    except Exception as e:
+        logging.error(f"[PARTIAL_EXTRACT] Error: {str(e)}", exc_info=True)
+        # Mark as failed
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE app_accounts SET catalog_status = ? WHERE id = ?",
+                ("failed", account_id)
+            )
+            conn.commit()
+            conn.close()
+        except:
+            pass
+        return 0
+
+
+def send_demo_ready_email(to_email: str, name: str, demo_url: str, lang: str = "es") -> bool:
+    """Send 'your demo is ready' email."""
+    if not RESEND_API_KEY:
+        logging.warning("[EMAIL] RESEND_API_KEY not set; skipping demo_ready email to %s", to_email)
+        return False
+
+    if lang == "en":
+        subject = "Your Wapsell demo is ready 🚀"
+        html = (
+            f"<div style='font-family:sans-serif;max-width:480px;margin:auto'>"
+            f"<h2>Hi {name}! 👋</h2>"
+            f"<p>Your personalized Wapsell agent demo is ready. "
+            f"We've extracted your properties and set up an intelligent sales agent "
+            f"trained on your catalog.</p>"
+            f"<p><a href='{demo_url}' style='background:#075E54;color:#fff;"
+            f"padding:12px 20px;border-radius:8px;text-decoration:none;"
+            f"display:inline-block'>Try my demo →</a></p>"
+            f"<p style='color:#888;font-size:12px'>You can test it for 7 days. "
+            f"After that, upgrade to keep using it.</p>"
+            f"</div>"
+        )
+    else:
+        subject = "Tu demo en Wapsell está lista 🚀"
+        html = (
+            f"<div style='font-family:sans-serif;max-width:480px;margin:auto'>"
+            f"<h2>¡Hola {name}! 👋</h2>"
+            f"<p>Tu agente de ventas personalizado en Wapsell está listo. "
+            f"Extrajimos tus propiedades y preparamos un agente inteligente "
+            f"entrenado en tu catálogo.</p>"
+            f"<p><a href='{demo_url}' style='background:#075E54;color:#fff;"
+            f"padding:12px 20px;border-radius:8px;text-decoration:none;"
+            f"display:inline-block'>Probar mi demo →</a></p>"
+            f"<p style='color:#888;font-size:12px'>Podés probarlo durante 7 días. "
+            f"Después, mejora el plan para continuar.</p>"
+            f"</div>"
+        )
+
+    payload = json.dumps({
+        "from": RESEND_FROM,
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.resend.com/emails", data=payload, method="POST",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "wapsell/1.0 (+https://wapsell.com)",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            ok = r.status in (200, 201)
+            logging.info("[EMAIL] demo_ready sent to %s (status %s)", to_email, r.status)
+            return ok
+    except Exception as e:
+        logging.error("[EMAIL] demo_ready send failed for %s: %s", to_email, e)
+        return False
 
 
 def _do_extract(tokko_url: str, prospect_id: str, prospect_name: str, db_path: str) -> tuple:

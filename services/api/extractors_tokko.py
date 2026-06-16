@@ -68,8 +68,13 @@ class TokkoExtractor:
 
         return None
 
-    def get_property_listing_urls(self, max_pages: int = 100) -> List[str]:
-        """Get URLs of individual property pages by paginating."""
+    def get_property_listing_urls(self, max_pages: int = 100, max_properties: Optional[int] = None) -> List[str]:
+        """Get URLs of individual property pages by paginating.
+
+        Args:
+            max_pages: Maximum pages to fetch
+            max_properties: Stop after this many properties (e.g., 20 for quick demo)
+        """
         urls = []
         page = 1
 
@@ -91,8 +96,12 @@ class TokkoExtractor:
                     full_url = urljoin(self.base_url, href)
                     if full_url not in urls:
                         urls.append(full_url)
+                        # Check if we hit the limit
+                        if max_properties and len(urls) >= max_properties:
+                            logger.info(f"Reached max_properties limit ({max_properties})")
+                            return urls
 
-            logger.info(f"Page {page}: found {len(prop_links)} properties")
+            logger.info(f"Page {page}: found {len(prop_links)} properties (total: {len(urls)})")
             page += 1
 
         return urls
