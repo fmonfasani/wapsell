@@ -1,4 +1,9 @@
-"""Extractor de catálogos Tokko — parsea propiedades de sitios Tokko."""
+"""Extractor de catálogos Tokko — parsea propiedades de sitios Tokko.
+
+Soporta:
+- Tokko estática (requests + BeautifulSoup)
+- Next.js / SPA (Playwright para JS rendering)
+"""
 
 import re
 import requests
@@ -6,6 +11,12 @@ from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import logging
+
+try:
+    from playwright.sync_api import sync_playwright
+    HAS_PLAYWRIGHT = True
+except ImportError:
+    HAS_PLAYWRIGHT = False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -129,8 +140,79 @@ class TokkoExtractor:
             logger.error(f"Detail extraction error {url}: {e}")
             return None
 
+    def extract_with_playwright(self, max_properties: int = 100) -> List[Dict]:
+        """Extract properties using Playwright (for SPA/Next.js sites)."""
+        if not HAS_PLAYWRIGHT:
+            logger.error("Playwright not installed. Run: pip install playwright")
+            return []
+
+        logger.info("Using Playwright for SPA extraction...")
+        properties = []
+
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+
+                # Common paths for property listings
+                listing_paths = [
+                    "/propiedades",
+                    "/properties",
+                    "/catalog",
+                    "/listings",
+                    "/inmuebles",
+                    "/venta",
+                    "/alquiler",
+                ]
+
+                for path in listing_paths:
+                    url = self.base_url + path
+                    logger.info(f"Trying {url}...")
+
+                    try:
+                        page.goto(url, wait_until="networkidle", timeout=15000)
+                        page.wait_for_timeout(2000)  # Wait for JS to render
+                    except:
+                        continue
+
+                    # Look for property cards/links
+                    # Common selectors for property links
+                    selectors = [
+                        "a[href*='/p/']",
+                        "a[href*='/property/']",
+                        "a[href*='/listing/']",
+                        ".property-card a",
+                        ".listing-card a",
+                    ]
+
+                    for selector in selectors:
+                        try:
+                            links = page.locator(selector).all()
+                            if links:
+                                logger.info(f"Found {len(links)} properties with selector '{selector}'")
+                                for link in links[:max_properties]:
+                                    href = link.get_attribute("href")
+                                    if href:
+                                        full_url = urljoin(self.base_url, href)
+                                        details = self.get_property_details(full_url)
+                                        if details:
+                                            properties.append(details)
+                                if len(properties) >= max_properties:
+                                    break
+                        except:
+                            pass
+
+                    if len(properties) > 0:
+                        break
+
+                browser.close()
+        except Exception as e:
+            logger.error(f"Playwright extraction error: {e}")
+
+        return properties
+
     def extract_all(self) -> List[Dict]:
-        """Extract all properties."""
+        """Extract all properties. Falls back to Playwright if requests fails."""
         count = self.get_property_count()
         logger.info(f"Expected {count} properties")
 
@@ -142,6 +224,11 @@ class TokkoExtractor:
             details = self.get_property_details(url)
             if details:
                 properties.append(details)
+
+        # Fallback to Playwright if requests yielded nothing
+        if len(properties) == 0 and HAS_PLAYWRIGHT:
+            logger.info("No properties found with requests. Trying Playwright...")
+            properties = self.extract_with_playwright()
 
         return properties
 
