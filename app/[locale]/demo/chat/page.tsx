@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, FormEvent } from "react";
-import { useParams } from "next/navigation";
+import { useState, useEffect, useRef, FormEvent, Suspense } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { buildWaLink } from "@/lib/constants";
 
@@ -91,10 +91,12 @@ function uid() {
 
 export default function DemoChatPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const locale = (params?.locale === "en" ? "en" : "es") as "es" | "en";
   const t = STR[locale];
 
   const [demoId, setDemoId] = useState<string | null>(null);
+  const [prospectId] = useState<string | null>(() => searchParams?.get("prospect"));
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -179,14 +181,16 @@ export default function DemoChatPage() {
     setSending(true);
 
     try {
-      const res = await fetch(
-        `${API_BASE}/chat/message?user_id=${demoId}&lang=${locale}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text }),
-        }
-      );
+      const url = new URL(`${API_BASE}/chat/message`);
+      url.searchParams.set("user_id", demoId);
+      url.searchParams.set("lang", locale);
+      if (prospectId) url.searchParams.set("prospect_id", prospectId);
+
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setMessages((prev) => [

@@ -719,8 +719,8 @@ def promote_lead_to_deal(lead_id: str) -> Optional[dict]:
 
 # --- Chat & Properties Utils ---
 
-def search_properties(query: str, limit: int = 5) -> list:
-    """Search properties by keyword, matching title/location words (fuzzy-friendly)."""
+def search_properties(query: str, limit: int = 5, prospect_id: Optional[str] = None) -> list:
+    """Search properties. If prospect_id, search tenant_catalogs; else use demo properties."""
     conn = get_db()
     cursor = conn.cursor()
 
@@ -735,17 +735,31 @@ def search_properties(query: str, limit: int = 5) -> list:
         if len(w) >= 2 and w.lower() not in _STOP
     ]
 
-    # Match by word prefix (so "depto" matches "Departamento", "pal" matches "Palermo")
     results = []
-    if keywords:
-        cursor.execute(f"SELECT id, title, description, type, price, bedrooms, location FROM properties")
+
+    if prospect_id:
+        # Multi-tenant: search prospect's catalog
+        logging.info(f"[SEARCH] prospect_id={prospect_id}, searching tenant_catalogs")
+        cursor.execute("""
+            SELECT id, tipo || ' ' || m2_cubiertos || 'm2 - ' || barrio as title,
+                   content as description, tipo, precio_usd, dormitorios, ciudad
+            FROM tenant_catalogs WHERE prospect_id = ?
+        """, (prospect_id,))
+        all_props = cursor.fetchall()
+    else:
+        # Demo: use hardcoded properties
+        logging.info("[SEARCH] no prospect_id, using demo properties")
+        cursor.execute("""
+            SELECT id, title, description, type, price, bedrooms, location FROM properties
+        """)
         all_props = cursor.fetchall()
 
+    # Match by word prefix
+    if keywords and all_props:
         for kw in keywords:
             for prop in all_props:
-                # Check if keyword is a prefix of any word in title/location
                 title_words = prop[1].lower().split()
-                location_words = prop[6].lower().split()
+                location_words = prop[6].lower().split() if prop[6] else []
                 all_words = title_words + location_words
 
                 if any(w.startswith(kw) for w in all_words):
@@ -766,14 +780,8 @@ def search_properties(query: str, limit: int = 5) -> list:
             if len(unique_results) >= limit:
                 break
 
-    results = unique_results
-
-    # NOTE: no random fallback. If nothing matches we return [] so the chat
-    # can reply conversationally (a greeting / clarifying question) instead of
-    # dumping unrelated properties for messages like "hola" or "¿cómo estás?".
-
     conn.close()
-    print(f"[SEARCH] returning {len(results)} results")  # Debug
+    logging.info(f"[SEARCH] returning {len(unique_results)} results")
     return results
 
 # Greeting / small-talk detection so the bot answers conversationally instead
@@ -1228,8 +1236,11 @@ async def logout(response: Response):
 # --- Chat Endpoints ---
 
 @app.post("/chat/message", response_model=ChatResponse)
-async def chat_message(request: Request, req: ChatRequest, user_id: str = None, lang: str = "es"):
-    """Send a message and get adaptive persona-aware response with RAG."""
+async def chat_message(request: Request, req: ChatRequest, user_id: str = None, lang: str = "es", prospect_id: str = None):
+    """Send a message and get adaptive persona-aware response with RAG.
+
+    prospect_id (optional): if set, search that prospect's catalog instead of demo properties.
+    """
     rate_limit(request, "chat_message", limit=40, window_s=60)
     try:
         if not user_id:
@@ -1258,7 +1269,7 @@ async def chat_message(request: Request, req: ChatRequest, user_id: str = None, 
                 buyer_profile_manager.db.record_interaction(user_id, successful=True)
             else:
                 intent = wapsell_sales.detect_intent(msg)  # pricing/how/why/contract/...
-                properties = search_properties(msg, limit=5)
+                properties = search_properties(msg, limit=5, prospect_id=prospect_id)
                 if intent == "pricing" or wapsell_sales.is_quote_request(msg):
                     # Auto-quote if they mention a volume or a specific plan.
                     vol = wapsell_sales.detect_volume(msg)
