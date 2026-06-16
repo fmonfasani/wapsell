@@ -14,6 +14,9 @@ COPY main.py .
 COPY buyer_personas.py .
 COPY buyer_profile_manager.py .
 COPY wapsell_sales.py .
+COPY extractors_tokko.py .
+COPY loader_catalogs.py .
+COPY extract_catalog.py .
 COPY integrations/ ./integrations/
 
 # Data dir for the persistent SQLite volume (WAPSELL_DB_PATH=/data/wapsell.db).

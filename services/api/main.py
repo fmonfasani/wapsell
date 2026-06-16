@@ -49,6 +49,10 @@ import wapsell_sales
 from integrations.mercadolibre.db import init_ml_tables
 from integrations.mercadolibre.router import router as mercadolibre_router
 
+# Catalog extraction & loading
+from extractors_tokko import TokkoExtractor
+from loader_catalogs import CatalogLoader
+
 try:
     import openpyxl
 except ImportError:
@@ -1882,6 +1886,97 @@ async def prospects_stats(x_admin_token: Optional[str] = Header(None)):
         }
     except Exception as e:
         logging.error(f"Prospects stats error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Catalogs (Dataset B) ---
+
+class CatalogExtractRequest(BaseModel):
+    """Request to extract a Tokko catalog."""
+    tokko_url: str
+    prospect_id: str
+
+
+@app.post("/catalogs/extract")
+async def extract_catalog(req: CatalogExtractRequest, x_admin_token: Optional[str] = Header(None)):
+    """Extract a Tokko catalog and load to tenant_catalogs table. Admin-only.
+
+    Background job: extracts ~1000 properties, may take 2-5 minutes.
+    Returns immediately with a task ID; check /catalogs/extract/{task_id} for progress.
+    """
+    _require_admin(x_admin_token)
+
+    try:
+        prospect_id = req.prospect_id.strip()
+        tokko_url = req.tokko_url.strip()
+
+        # Verify prospect exists
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT nombre FROM prospects WHERE id = ?", (prospect_id,))
+        prospect = cursor.fetchone()
+        conn.close()
+
+        if not prospect:
+            raise HTTPException(status_code=404, detail=f"Prospect {prospect_id} not found")
+
+        logging.info(f"[EXTRACT] Starting catalog extraction for {prospect[0]} ({prospect_id})")
+
+        # Extract (this runs synchronously for now; in prod, use Celery/Redis)
+        extractor = TokkoExtractor(tokko_url, timeout=15)
+
+        count = extractor.get_property_count()
+        logging.info(f"[EXTRACT] Expected ~{count} properties")
+
+        urls = extractor.get_property_listing_urls(max_pages=10)
+        logging.info(f"[EXTRACT] Found {len(urls)} property URLs")
+
+        properties = extractor.extract_all()
+        logging.info(f"[EXTRACT] Extracted {len(properties)} properties")
+
+        # Convert to RAG format
+        rag_properties = extractor.to_rag_format(properties)
+
+        # Load to DB
+        db_path = os.getenv("WAPSELL_DB_PATH", os.path.join(os.path.dirname(__file__), "wapsell.db"))
+        loader = CatalogLoader(db_path)
+        loaded = loader.load_rag_format(prospect_id, rag_properties)
+        loader.close()
+
+        logging.info(f"[EXTRACT] ✓ Loaded {loaded} properties for {prospect[0]}")
+
+        return {
+            "status": "success",
+            "prospect_id": prospect_id,
+            "prospect_name": prospect[0],
+            "properties_loaded": loaded,
+            "message": f"Loaded {loaded} properties from {tokko_url}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[EXTRACT] Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+
+
+@app.get("/catalogs/{prospect_id}")
+async def get_prospect_catalog(prospect_id: str, x_admin_token: Optional[str] = Header(None)):
+    """Get catalog (properties) for a prospect. Admin-only."""
+    _require_admin(x_admin_token)
+
+    try:
+        db_path = os.getenv("WAPSELL_DB_PATH", os.path.join(os.path.dirname(__file__), "wapsell.db"))
+        loader = CatalogLoader(db_path)
+        properties = loader.get_catalog_for_prospect(prospect_id)
+        loader.close()
+
+        return {
+            "prospect_id": prospect_id,
+            "count": len(properties),
+            "properties": properties
+        }
+    except Exception as e:
+        logging.error(f"Get catalog error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
