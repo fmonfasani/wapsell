@@ -1810,6 +1810,80 @@ async def debug_hindsight(x_admin_token: Optional[str] = Header(None)):
             "type": type(e).__name__
         }
 
+# --- Prospects (Immobiliarias) ---
+
+@app.get("/prospects")
+async def list_prospects(tier: str = None, limit: int = 100, x_admin_token: Optional[str] = Header(None)):
+    """List immobiliarias (prospects) for outreach. Admin-only."""
+    _require_admin(x_admin_token)
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        query = "SELECT id, nombre, whatsapp, tier, cant_propiedades, website, plataforma FROM prospects"
+        params = []
+        if tier and tier != "all":
+            query += " WHERE tier = ?"
+            params.append(tier)
+
+        query += " ORDER BY tier DESC, cant_propiedades DESC LIMIT ?"
+        params.append(limit)
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+
+        return {
+            "prospects": [
+                {
+                    "id": r[0],
+                    "nombre": r[1],
+                    "whatsapp": r[2],
+                    "tier": r[3],
+                    "cant_propiedades": r[4],
+                    "website": r[5],
+                    "plataforma": r[6],
+                }
+                for r in rows
+            ],
+            "count": len(rows),
+        }
+    except Exception as e:
+        logging.error(f"List prospects error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/prospects/stats")
+async def prospects_stats(x_admin_token: Optional[str] = Header(None)):
+    """Prospects summary stats. Admin-only."""
+    _require_admin(x_admin_token)
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM prospects")
+        total = cursor.fetchone()[0]
+
+        cursor.execute("SELECT tier, COUNT(*) FROM prospects GROUP BY tier ORDER BY tier")
+        by_tier = dict(cursor.fetchall())
+
+        cursor.execute("SELECT SUM(cant_propiedades) FROM prospects")
+        total_props = cursor.fetchone()[0] or 0
+
+        cursor.execute("SELECT tier, AVG(cant_propiedades) FROM prospects WHERE cant_propiedades > 0 GROUP BY tier")
+        avg_props = dict(cursor.fetchall())
+
+        conn.close()
+
+        return {
+            "total": total,
+            "by_tier": by_tier,
+            "total_properties": int(total_props),
+            "avg_properties_by_tier": avg_props,
+        }
+    except Exception as e:
+        logging.error(f"Prospects stats error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""
