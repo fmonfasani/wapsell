@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
 
@@ -11,7 +11,7 @@ interface Status {
   properties_total: string | number;
 }
 
-export default function DashboardReadyPage() {
+function DashboardReadyContent() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -217,5 +217,22 @@ export default function DashboardReadyPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DashboardReadyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-[#efeae2] to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block">
+            <div className="w-12 h-12 border-4 border-[#075E54] border-t-transparent rounded-full animate-spin mb-4"></div>
+          </div>
+          <p className="text-slate-600">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <DashboardReadyContent />
+    </Suspense>
   );
 }
