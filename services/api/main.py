@@ -208,7 +208,7 @@ def init_db():
             plan TEXT DEFAULT 'starter',
             status TEXT DEFAULT 'trial',
             usage_leads INTEGER DEFAULT 0,
-            usage_limit INTEGER DEFAULT 50,
+            usage_limit INTEGER DEFAULT 10,
             created_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES app_users(id)
         )
@@ -561,7 +561,7 @@ def check_account_usage(account_id: str) -> tuple[bool, str]:
     # If in trial, check against limit
     if status == "trial":
         current = usage_leads or 0
-        limit = usage_limit or 50  # Default trial is 50 leads
+        limit = usage_limit or 10  # Default trial is 10 leads
         if current >= limit:
             return False, f"Trial limit reached ({limit} leads)"
         return True, f"Trial active ({current}/{limit} leads)"
