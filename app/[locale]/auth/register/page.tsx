@@ -77,7 +77,6 @@ export default function RegisterPage() {
       const response = await fetch(`${apiBase}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
@@ -88,6 +87,11 @@ export default function RegisterPage() {
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.detail || "Error al registrarse");
+      }
+
+      const data = await response.json();
+      if (data.token) {
+        localStorage.setItem("wapsell_token", data.token);
       }
 
       router.push(`/${locale}/app/onboarding`);

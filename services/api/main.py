@@ -406,6 +406,7 @@ class UserOut(BaseModel):
     id: str
     email: str
     created_at: str
+    token: Optional[str] = None
 
 class ChatRequest(BaseModel):
     message: str
@@ -1144,7 +1145,7 @@ CORS_ORIGINS = os.getenv(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in CORS_ORIGINS if o.strip()],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1207,11 +1208,12 @@ async def register(req: RegisterRequest, response: Response):
             httponly=True,
             secure=COOKIE_SECURE,  # True in prod (HTTPS) via WAPSELL_ENV
             samesite="lax",
+            domain="wapsell.com",
             expires=expires_at,
             path="/",
         )
 
-        return UserOut(id=user_id, email=req.email, created_at=now)
+        return UserOut(id=user_id, email=req.email, created_at=now, token=token)
 
     except sqlite3.IntegrityError as exc:
         if "UNIQUE constraint failed" in str(exc):
@@ -1258,6 +1260,7 @@ async def login(req: LoginRequest, response: Response):
             httponly=True,
             secure=COOKIE_SECURE,  # True in prod (HTTPS) via WAPSELL_ENV
             samesite="lax",
+            domain="wapsell.com",
             expires=expires_at,
             path="/",
         )
@@ -1304,11 +1307,22 @@ async def chat_message(request: Request, req: ChatRequest, user_id: str = None, 
     """
     rate_limit(request, "chat_message", limit=40, window_s=60)
     try:
-        if not user_id:
-            raise HTTPException(status_code=401, detail="user_id required")
+        # Use prospect_id as identity if user_id not provided
+        identity = user_id or prospect_id
+        if not identity:
+            raise HTTPException(status_code=401, detail="user_id or prospect_id required")
 
-        # Identity can be a registered user OR a demo lead.
-        if not get_identity(user_id):
+        # Identity can be a registered user, account prospect, OR a demo lead.
+        # If prospect_id, it's valid if it's an app_account
+        if prospect_id:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM app_accounts WHERE id = ?", (prospect_id,))
+            has_account = cursor.fetchone() is not None
+            conn.close()
+            if not has_account:
+                raise HTTPException(status_code=401, detail="Unknown prospect")
+        elif not get_identity(identity):
             raise HTTPException(status_code=401, detail="Unknown identity")
 
         # If prospect_id is provided and it's an app account, check usage
@@ -1987,8 +2001,8 @@ async def onboarding_property_source(req: PropertySourceRequest, request: Reques
     and returns demo URL.
     """
     try:
-        # Get user_id from session
-        token = request.cookies.get("wapsell_session")
+        # Get user_id from session token (cookie or Authorization header)
+        token = request.cookies.get("wapsell_session") or request.headers.get("authorization", "").replace("Bearer ", "")
         user_id = verify_session(token)
         if not user_id:
             raise HTTPException(status_code=401, detail="Not authenticated")
@@ -2051,8 +2065,8 @@ async def onboarding_property_source(req: PropertySourceRequest, request: Reques
 async def onboarding_status(account_id: str, request: Request):
     """Get extraction status for an account."""
     try:
-        # Get user_id from session
-        token = request.cookies.get("wapsell_session")
+        # Get user_id from session token (cookie or Authorization header)
+        token = request.cookies.get("wapsell_session") or request.headers.get("authorization", "").replace("Bearer ", "")
         user_id = verify_session(token)
         if not user_id:
             raise HTTPException(status_code=401, detail="Not authenticated")

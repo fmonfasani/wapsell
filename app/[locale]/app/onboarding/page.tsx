@@ -35,12 +35,13 @@ export default function OnboardingPage() {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.wapsell.com";
 
+      const token = localStorage.getItem("wapsell_token");
       const res = await fetch(`${apiUrl}/onboarding/property-source`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(token && { "Authorization": `Bearer ${token}` }),
         },
-        credentials: "include",
         body: JSON.stringify({
           tokko_url: formData.tokko_url,
           whatsapp: formData.whatsapp || undefined,
