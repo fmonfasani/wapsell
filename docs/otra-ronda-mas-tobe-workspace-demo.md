@@ -24,7 +24,7 @@ Show a responsive, WhatsApp-inspired commercial workspace for Wapsell with Otra 
 ## Data provenance and limitations
 
 - Brand name, tagline and visual palette are drawn from the Otra Ronda Más project context: Otra Ronda Más, “Bebidas y mucho más para tu negocio”, #FFD700, #1a1a1a, #2d2d2d, #f5f5f5.
-- Product names, prices, quantities, conversations, customers, order totals and metrics in this page are illustrative mock data, not a verified export of the current production catalog or database. Do not use them for commercial decisions.
+- The six initial catalog rows and their prices/codes are taken from the tracked Otra Ronda Más seed file (apps/api/prisma/seed-data-minorista.json, rows shown at the beginning of the file). This is a sample, not a complete catalog sync. Stock quantities, conversations, customers, order totals and metrics remain illustrative mock data. Do not use demo quantities or metrics for commercial decisions.
 - All actions are client-side simulations. They do not write to FastAPI, NestJS, PostgreSQL, SQLite, Messaging, stock, cash or order persistence.
 - No real WhatsApp delivery, payment processing, role enforcement, tenant isolation or realtime transport is exercised by this prototype.
 - The screen represents a product direction based on TO-BE documentation; it does not approve draft specifications or resolve open product decisions.
