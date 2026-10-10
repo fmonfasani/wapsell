@@ -118,7 +118,15 @@ export default function WorkspaceDemoPage() {
     setOrders((old) => old.map((o) => o.id === id ? { ...o, status: flow[o.status] || "Preparando" } : o));
     notify(`${id}: estado actualizado en la demo.`);
   };
-  const createOrderFromCart = () => {\n    if (!cartCount) return;\n    const id = `OR-DEMO-${Date.now().toString().slice(-5)}`;\n    setOrders((old) => [{ id, customer: active.name, items: cartCount, total: cartTotal, status: "Pendiente", channel: "Catálogo demo", time: "Ahora" }, ...old]);\n    setCart({});\n    setModule("orders");\n    notify(`${id}: pedido de prueba creado localmente.`);\n  };\n  const createProduct = () => {
+  const createOrderFromCart = () => {
+    if (!cartCount) return;
+    const id = `OR-DEMO-${Date.now().toString().slice(-5)}`;
+    setOrders((old) => [{ id, customer: active.name, items: cartCount, total: cartTotal, status: "Pendiente", channel: "Catálogo demo", time: "Ahora" }, ...old]);
+    setCart({});
+    setModule("orders");
+    notify(`${id}: pedido de prueba creado localmente.`);
+  };
+  const createProduct = () => {
     if (!formName.trim()) return;
     setCustomProducts((old) => [...old, { id: 100 + old.length, name: formName, category: "Nuevo", sku: `DEMO-${100 + old.length}`, price: Number(formPrice) || 0, stock: 10, unit: "unidad", mark: "📦" }]);
     setFormName(""); setModal(null); notify("Producto de prueba agregado al catálogo.");
