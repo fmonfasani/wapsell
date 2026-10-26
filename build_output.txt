@@ -1,0 +1,81 @@
+﻿
+> wapsell@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.5
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/36) ...
+   Generating static pages (9/36) 
+   Generating static pages (18/36) 
+   Generating static pages (27/36) 
+ ✓ Generating static pages (36/36)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /_not-found                          873 B           108 kB
+├ ● /[locale]                            187 B           107 kB
+├   ├ /es
+├   └ /en
+├ ● /[locale]/app/onboarding             1.96 kB         109 kB
+├   ├ /es/app/onboarding
+├   └ /en/app/onboarding
+├ ● /[locale]/auth/login                 1.31 kB         108 kB
+├   ├ /es/auth/login
+├   └ /en/auth/login
+├ ● /[locale]/auth/register              1.83 kB         109 kB
+├   ├ /es/auth/register
+├   └ /en/auth/register
+├ ● /[locale]/dashboard/ready            2.23 kB         109 kB
+├   ├ /es/dashboard/ready
+├   └ /en/dashboard/ready
+├ ● /[locale]/demo                       443 B           107 kB
+├   ├ /es/demo
+├   └ /en/demo
+├ ● /[locale]/demo-tour                  1.05 kB         108 kB
+├   ├ /es/demo-tour
+├   └ /en/demo-tour
+├ ● /[locale]/demo/chat                  4.9 kB          112 kB
+├   ├ /es/demo/chat
+├   └ /en/demo/chat
+├ ● /[locale]/demo/signup                443 B           107 kB
+├   ├ /es/demo/signup
+├   └ /en/demo/signup
+├ ● /[locale]/demo/workspace             171 B           119 kB
+├   ├ /es/demo/workspace
+├   └ /en/demo/workspace
+├ ƒ /[locale]/opengraph-image            0 B                0 B
+├ ● /[locale]/privacy                    1.61 kB         109 kB
+├   ├ /es/privacy
+├   └ /en/privacy
+├ ● /[locale]/prospects                  4.1 kB          111 kB
+├   ├ /es/prospects
+├   └ /en/prospects
+├ ● /[locale]/terms                      1.61 kB         109 kB
+├   ├ /es/terms
+├   └ /en/terms
+├ ● /[locale]/ventas                     2.82 kB         110 kB
+├   ├ /es/ventas
+├   └ /en/ventas
+├ ● /[locale]/workspace                  173 B           119 kB
+├   ├ /es/workspace
+├   └ /en/workspace
+├ ○ /icon.svg                            0 B                0 B
+├ ○ /robots.txt                          0 B                0 B
+└ ○ /sitemap.xml                         0 B                0 B
++ First Load JS shared by all            107 kB
+  ├ chunks/852-11e91a3d40a533ff.js       51.3 kB
+  ├ chunks/fd9d1056-a71aca2439d4ef38.js  53.6 kB
+  └ other shared chunks (total)          1.96 kB
+
+
+ƒ Middleware                             47.1 kB
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses getStaticProps)
+ƒ  (Dynamic)  server-rendered on demand
+

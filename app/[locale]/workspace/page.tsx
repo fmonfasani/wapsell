@@ -47,9 +47,9 @@ const initialOrders = [
 const money = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
 
 const navGroups = [
-  { label: "VENTAS", items: [{ key: "inbox" as const, label: "Mensajería", icon: "◌", count: "3" }, { key: "orders" as const, label: "Pedidos", icon: "▤", count: "2" }, { key: "sales" as const, label: "Ventas", icon: "↗" }, { key: "customers" as const, label: "Clientes", icon: "♙" }] },
-  { label: "OPERACIONES", items: [{ key: "catalog" as const, label: "Catálogo", icon: "▦" }, { key: "stock" as const, label: "Stock", icon: "▥" }, { key: "purchases" as const, label: "Compras", icon: "⇩" }, { key: "cash" as const, label: "Caja", icon: "▣" }] },
-  { label: "NEGOCIO", items: [{ key: "reports" as const, label: "Reportes", icon: "▥" }, { key: "team" as const, label: "Equipo y permisos", icon: "♧" }, { key: "brand" as const, label: "Marca y negocio", icon: "✳" }] },
+  { label: "VENTAS", items: [{ key: "inbox" as const, label: "Mensajería", icon: "◌", count: "3" as const }, { key: "orders" as const, label: "Pedidos", icon: "▤", count: "2" as const }, { key: "sales" as const, label: "Ventas", icon: "↗", count: undefined }, { key: "customers" as const, label: "Clientes", icon: "♙", count: undefined }] },
+  { label: "OPERACIONES", items: [{ key: "catalog" as const, label: "Catálogo", icon: "▦", count: undefined }, { key: "stock" as const, label: "Stock", icon: "▥", count: undefined }, { key: "purchases" as const, label: "Compras", icon: "⇩", count: undefined }, { key: "cash" as const, label: "Caja", icon: "▣", count: undefined }] },
+  { label: "NEGOCIO", items: [{ key: "reports" as const, label: "Reportes", icon: "▥", count: undefined }, { key: "team" as const, label: "Equipo y permisos", icon: "♧", count: undefined }, { key: "brand" as const, label: "Marca y negocio", icon: "✳", count: undefined }] },
 ];
 const moduleTitles: Record<ModuleKey, { title: string; subtitle: string }> = {
   inbox: { title: "Mensajería", subtitle: "Cada conversación es una oportunidad de venta." },
