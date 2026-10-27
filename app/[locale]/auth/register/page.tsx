@@ -3,12 +3,16 @@
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Card, CardHeader, CardBody, CardFooter } from "@/components/ui/Card";
 
 interface FormErrors {
   name?: string;
   email?: string;
   password?: string;
   password_confirm?: string;
+  acceptTerms?: string;
 }
 
 export default function RegisterPage() {
@@ -17,18 +21,21 @@ export default function RegisterPage() {
   const locale = (params?.locale as string) || "es";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
     password_confirm: "",
   });
+
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear field error when user starts typing
     if (fieldErrors[name as keyof FormErrors]) {
       setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
     }
@@ -37,14 +44,18 @@ export default function RegisterPage() {
   const validateForm = (): boolean => {
     const errors: FormErrors = {};
 
-    if (!formData.name || formData.name.length < 2) {
+    // Name validation
+    if (!formData.name || formData.name.trim().length < 2) {
       errors.name = "El nombre debe tener al menos 2 caracteres";
     }
 
-    if (!formData.email || !formData.email.includes("@")) {
-      errors.email = "Email válido requerido";
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email || !emailRegex.test(formData.email)) {
+      errors.email = "Por favor ingresa un email válido";
     }
 
+    // Password validation
     if (!formData.password || formData.password.length < 8) {
       errors.password = "La contraseña debe tener al menos 8 caracteres";
     } else if (!/[A-Z]/.test(formData.password)) {
@@ -53,8 +64,14 @@ export default function RegisterPage() {
       errors.password = "La contraseña debe contener un número";
     }
 
+    // Password confirmation
     if (formData.password !== formData.password_confirm) {
       errors.password_confirm = "Las contraseñas no coinciden";
+    }
+
+    // Terms acceptance
+    if (!acceptTerms) {
+      errors.acceptTerms = "Debes aceptar los términos y condiciones";
     }
 
     setFieldErrors(errors);
@@ -78,8 +95,8 @@ export default function RegisterPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
+          name: formData.name.trim(),
+          email: formData.email.toLowerCase().trim(),
           password: formData.password,
         }),
       });
@@ -90,11 +107,23 @@ export default function RegisterPage() {
       }
 
       const data = await response.json();
-      if (data.token) {
-        localStorage.setItem("wapsell_token", data.token);
+
+      // Store JWT token and user data from successful registration
+      if (data.accessToken) {
+        localStorage.setItem("accessToken", data.accessToken);
+        localStorage.setItem("wapsell_token", data.accessToken);
       }
 
-      router.push(`/${locale}/app/onboarding`);
+      if (data.cliente) {
+        localStorage.setItem("user", JSON.stringify(data.cliente));
+        localStorage.setItem("empresaId", data.cliente.empresaId || "");
+      }
+
+      // Show success message and redirect
+      setSuccessMessage("¡Registro exitoso! Redirigiendo...");
+      setTimeout(() => {
+        router.push("/demo");
+      }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrarse");
     } finally {
@@ -103,147 +132,139 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4 md:p-6">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Crear Cuenta
-            </h1>
-            <p className="text-slate-600">
-              Regístrate para acceder a Wapsell
-            </p>
-          </div>
+        {/* Logo/Brand */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-neutral-900 mb-2">Wapsell</h1>
+          <p className="text-neutral-600">Crea tu cuenta en segundos</p>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Nombre */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Nombre completo
-              </label>
-              <input
+        {/* Registration Card */}
+        <Card shadow="md">
+          <CardHeader
+            title="Crear Cuenta"
+            description="Regístrate para acceder a Wapsell"
+          />
+
+          <CardBody>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Success Alert */}
+              {successMessage && (
+                <div className="alert alert-success">
+                  ✓ {successMessage}
+                </div>
+              )}
+
+              {/* Error Alert */}
+              {error && (
+                <div className="alert alert-error">
+                  ⚠️ {error}
+                </div>
+              )}
+
+              {/* Name Input */}
+              <Input
                 type="text"
                 name="name"
+                label="Nombre completo"
+                placeholder="Tu nombre"
                 value={formData.name}
                 onChange={handleChange}
                 required
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent transition ${
-                  fieldErrors.name
-                    ? "border-red-500 bg-red-50"
-                    : "border-slate-300"
-                }`}
-                placeholder="Tu nombre"
                 disabled={loading}
+                error={fieldErrors.name}
               />
-              {fieldErrors.name && (
-                <p className="text-sm text-red-600 mt-1">{fieldErrors.name}</p>
-              )}
-            </div>
 
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Email
-              </label>
-              <input
+              {/* Email Input */}
+              <Input
                 type="email"
                 name="email"
+                label="Email"
+                placeholder="tu@email.com"
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent transition ${
-                  fieldErrors.email
-                    ? "border-red-500 bg-red-50"
-                    : "border-slate-300"
-                }`}
-                placeholder="tu@email.com"
                 disabled={loading}
+                error={fieldErrors.email}
               />
-              {fieldErrors.email && (
-                <p className="text-sm text-red-600 mt-1">{fieldErrors.email}</p>
-              )}
-            </div>
 
-            {/* Contraseña */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Contraseña
-              </label>
-              <input
+              {/* Password Input */}
+              <Input
                 type="password"
                 name="password"
+                label="Contraseña"
+                placeholder="••••••••"
                 value={formData.password}
                 onChange={handleChange}
                 required
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent transition ${
-                  fieldErrors.password
-                    ? "border-red-500 bg-red-50"
-                    : "border-slate-300"
-                }`}
-                placeholder="••••••••"
                 disabled={loading}
+                error={fieldErrors.password}
+                helper="Mínimo 8 caracteres, 1 mayúscula, 1 número"
               />
-              {fieldErrors.password && (
-                <p className="text-sm text-red-600 mt-1">{fieldErrors.password}</p>
-              )}
-              <p className="text-xs text-slate-500 mt-2">
-                Mínimo 8 caracteres, 1 mayúscula, 1 número
-              </p>
-            </div>
 
-            {/* Confirmar Contraseña */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Confirmar contraseña
-              </label>
-              <input
+              {/* Confirm Password Input */}
+              <Input
                 type="password"
                 name="password_confirm"
+                label="Confirmar Contraseña"
+                placeholder="••••••••"
                 value={formData.password_confirm}
                 onChange={handleChange}
                 required
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent transition ${
-                  fieldErrors.password_confirm
-                    ? "border-red-500 bg-red-50"
-                    : "border-slate-300"
-                }`}
-                placeholder="••••••••"
                 disabled={loading}
+                error={fieldErrors.password_confirm}
               />
-              {fieldErrors.password_confirm && (
-                <p className="text-sm text-red-600 mt-1">
-                  {fieldErrors.password_confirm}
-                </p>
-              )}
-            </div>
 
-            {/* Error general */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-3 rounded">
-                {error}
-              </div>
-            )}
+              {/* Privacy Agreement */}
+              <label className="flex items-start gap-3 text-sm text-neutral-600">
+                <input
+                  type="checkbox"
+                  required
+                  className="mt-1 w-4 h-4"
+                />
+                <span>
+                  Acepto los{" "}
+                  <Link href="/terms" className="text-brand-600 hover:text-brand-700 font-medium">
+                    términos de servicio
+                  </Link>{" "}
+                  y la{" "}
+                  <Link href="/privacy" className="text-brand-600 hover:text-brand-700 font-medium">
+                    política de privacidad
+                  </Link>
+                </span>
+              </label>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              {loading ? "Creando cuenta..." : "Registrarse"}
-            </button>
-          </form>
+              {/* Submit Button */}
+              <Button
+                type="submit"
+                variant="primary"
+                fullWidth
+                size="lg"
+                loading={loading}
+              >
+                Crear Cuenta
+              </Button>
+            </form>
+          </CardBody>
 
-          <div className="mt-6 text-center text-sm text-slate-600">
-            ¿Ya tienes cuenta?{" "}
-            <Link
-              href="/auth/login"
-              className="text-brand-600 hover:text-brand-700 font-semibold"
-            >
-              Inicia sesión
-            </Link>
-          </div>
-        </div>
+          <CardFooter className="flex flex-col items-center">
+            <p className="text-sm text-neutral-600">
+              ¿Ya tienes cuenta?{" "}
+              <Link href="/auth/login" className="text-brand-600 hover:text-brand-700 font-semibold">
+                Inicia sesión aquí
+              </Link>
+            </p>
+          </CardFooter>
+        </Card>
+
+        {/* Footer */}
+        <p className="text-center text-xs text-neutral-600 mt-8">
+          ¿Preguntas? Contacta con{" "}
+          <a href="mailto:support@wapsell.com" className="text-brand-600 hover:text-brand-700 font-medium">
+            support@wapsell.com
+          </a>
+        </p>
       </div>
     </div>
   );

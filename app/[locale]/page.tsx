@@ -1,5 +1,5 @@
 import { setRequestLocale } from "next-intl/server";
-import { Hero } from "@/components/Hero";
+import { LandingHero } from "@/components/LandingHero";
 import { ProblemSection } from "@/components/ProblemSection";
 import { DemoTeaser } from "@/components/DemoTeaser";
 import { FinalCTA } from "@/components/FinalCTA";
@@ -16,7 +16,7 @@ export default async function HomePage({
   return (
     <>
       <main>
-        <Hero />
+        <LandingHero locale={locale} />
         <ProblemSection />
         <DemoTeaser />
         <FinalCTA />

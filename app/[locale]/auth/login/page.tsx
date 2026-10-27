@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Card, CardHeader, CardBody, CardFooter } from "@/components/ui/Card";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,7 +44,19 @@ export default function LoginPage() {
         throw new Error(data.detail || "Error al iniciar sesión");
       }
 
-      // Login exitoso, redirigir a demo
+      const data = await response.json();
+
+      // Store JWT token and user data from successful login
+      if (data.accessToken) {
+        localStorage.setItem("accessToken", data.accessToken);
+        localStorage.setItem("wapsell_token", data.accessToken);
+      }
+
+      if (data.cliente) {
+        localStorage.setItem("user", JSON.stringify(data.cliente));
+        localStorage.setItem("empresaId", data.cliente.empresaId || "");
+      }
+
       router.push("/demo");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al iniciar sesión");
@@ -51,77 +66,92 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4 md:p-6">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Inicia Sesión
-            </h1>
-            <p className="text-slate-600">
-              Accede a tu cuenta de Wapsell
-            </p>
-          </div>
+        {/* Logo/Brand */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-neutral-900 mb-2">Wapsell</h1>
+          <p className="text-neutral-600">Gestiona tus ventas en WhatsApp</p>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Email
-              </label>
-              <input
+        {/* Login Card */}
+        <Card shadow="md">
+          <CardHeader
+            title="Inicia Sesión"
+            description="Accede a tu cuenta para continuar"
+          />
+
+          <CardBody>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Error Alert */}
+              {error && (
+                <div className="alert alert-error">
+                  ⚠️ {error}
+                </div>
+              )}
+
+              {/* Email Input */}
+              <Input
                 type="email"
                 name="email"
+                label="Email"
+                placeholder="tu@email.com"
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                placeholder="tu@email.com"
                 disabled={loading}
+                helper="Ingresa el email de tu cuenta"
               />
-            </div>
 
-            {/* Contraseña */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Contraseña
-              </label>
-              <input
+              {/* Password Input */}
+              <Input
                 type="password"
                 name="password"
+                label="Contraseña"
+                placeholder="••••••••"
                 value={formData.password}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                placeholder="••••••••"
                 disabled={loading}
               />
-            </div>
 
-            {/* Error */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-3 rounded">
-                {error}
+              {/* Forgot Password Link */}
+              <div className="text-right">
+                <Link href="/auth/forgot-password" className="text-sm text-brand-600 hover:text-brand-700 font-medium">
+                  ¿Olvidaste tu contraseña?
+                </Link>
               </div>
-            )}
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              {loading ? "Iniciando sesión..." : "Inicia Sesión"}
-            </button>
-          </form>
+              {/* Submit Button */}
+              <Button
+                type="submit"
+                variant="primary"
+                fullWidth
+                size="lg"
+                loading={loading}
+              >
+                Inicia Sesión
+              </Button>
+            </form>
+          </CardBody>
 
-          <div className="mt-6 text-center text-sm text-slate-600">
-            ¿No tienes cuenta?{" "}
-            <Link href="/auth/register" className="text-brand-600 hover:text-brand-700 font-semibold">
-              Regístrate
-            </Link>
-          </div>
-        </div>
+          <CardFooter className="flex flex-col items-center">
+            <p className="text-sm text-neutral-600">
+              ¿No tienes cuenta?{" "}
+              <Link href="/auth/register" className="text-brand-600 hover:text-brand-700 font-semibold">
+                Regístrate aquí
+              </Link>
+            </p>
+          </CardFooter>
+        </Card>
+
+        {/* Footer */}
+        <p className="text-center text-xs text-neutral-600 mt-8">
+          ¿Preguntas? Contacta con{" "}
+          <a href="mailto:support@wapsell.com" className="text-brand-600 hover:text-brand-700 font-medium">
+            support@wapsell.com
+          </a>
+        </p>
       </div>
     </div>
   );
