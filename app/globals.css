@@ -14,7 +14,7 @@
 /* ----------------------------------------------------------------------- */
 @layer base {
   html {
-    @apply bg-cream text-ink;
+    @apply bg-neutral-50 text-neutral-900;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -28,15 +28,46 @@
    * Stripe / Notion editorial feel comes from this single tweak. */
   h1,
   h2,
-  h3 {
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-display tracking-tightest;
   }
 
-  /* Focus rings: subtle amber, no default blue — keeps the palette pure. */
+  h1 {
+    @apply text-5xl md:text-6xl font-semibold leading-[1.1];
+  }
+
+  h2 {
+    @apply text-4xl md:text-5xl font-semibold leading-[1.15];
+  }
+
+  h3 {
+    @apply text-3xl md:text-4xl font-semibold leading-[1.2];
+  }
+
+  h4 {
+    @apply text-2xl md:text-3xl font-semibold leading-[1.25];
+  }
+
+  /* Focus rings: brand color, no default blue — keeps the palette pure. */
   *:focus-visible {
-    outline: 2px solid theme("colors.amber.DEFAULT");
+    outline: 2px solid theme("colors.brand.DEFAULT");
     outline-offset: 3px;
     border-radius: 4px;
+  }
+
+  /* Remove default form styling */
+  input,
+  textarea,
+  select {
+    @apply rounded-md border border-neutral-200 bg-white text-neutral-900;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-neutral-400;
   }
 }
 
@@ -44,60 +75,170 @@
 /* Reusable component classes — exposed via @apply for legibility in JSX.  */
 /* ----------------------------------------------------------------------- */
 @layer components {
-  /* Primary CTA: the amber pill. 56px tall per Stitch design system. */
+  /* ==================== BUTTONS ==================== */
+
+  /* Primary CTA: brand terracotta. 48px standard, 56px large. */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
-      bg-amber hover:bg-amber-hover
-      text-ink font-semibold
-      rounded-pill px-7 h-14
+      bg-brand-600 hover:bg-brand-700 active:bg-brand-800
+      text-white font-semibold
+      rounded-lg px-6 py-3
+      transition-colors duration-150
+      disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary-lg {
+    @apply btn-primary px-8 py-4 text-lg rounded-xl;
+  }
+
+  /* Secondary button: outlined style */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+      bg-white border-2 border-neutral-200
+      text-neutral-900 font-semibold
+      rounded-lg px-6 py-3
+      hover:bg-neutral-50 hover:border-neutral-300
+      transition-colors duration-150
+      disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Ghost button: transparent, text-only */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2
+      bg-transparent text-neutral-900
+      font-medium text-sm
+      hover:text-brand-600 hover:bg-brand-50
+      rounded-lg px-4 py-2
       transition-colors duration-150;
   }
 
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2
-      bg-transparent border border-cream-300
-      text-ink font-medium
-      rounded-pill px-7 h-14
-      hover:bg-cream-200 transition-colors duration-150;
+  /* ==================== TEXT & LABELS ==================== */
+
+  /* Eyebrow label — uppercase, wide tracking, muted text. Used above headings. */
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wider text-neutral-600;
   }
 
-  /* Eyebrow label — uppercase, wide tracking, taupe. Used above every H1/H2. */
-  .eyebrow {
-    @apply text-xs font-semibold uppercase tracking-eyebrow text-ink-muted;
+  /* Subtitle/description text */
+  .subtitle {
+    @apply text-lg md:text-xl text-neutral-600 leading-relaxed;
   }
+
+  /* ==================== LAYOUT ==================== */
 
   /* Section wrapper — common max-width and horizontal padding. */
   .section {
     @apply mx-auto w-full max-w-container px-5 md:px-8;
   }
 
-  /* Card surface — white over cream, soft border, no shadow per design system. */
-  .card {
-    @apply bg-white border border-cream-300 rounded-2xl p-8;
+  .section-sm {
+    @apply section max-w-4xl;
   }
+
+  .section-lg {
+    @apply section py-20 md:py-32;
+  }
+
+  /* Container with vertical padding */
+  .container-section {
+    @apply py-16 md:py-24 lg:py-32;
+  }
+
+  /* ==================== CARDS & SURFACES ==================== */
+
+  /* Card surface — white with subtle border and shadow */
+  .card {
+    @apply bg-white border border-neutral-200 rounded-xl p-6 md:p-8
+      shadow-sm hover:shadow-md transition-shadow;
+  }
+
+  .card-lg {
+    @apply card p-8 md:p-12;
+  }
+
+  /* ==================== FORMS ==================== */
+
+  .form-group {
+    @apply space-y-2 mb-6;
+  }
+
+  .form-label {
+    @apply block text-sm font-semibold text-neutral-900 mb-2;
+  }
+
+  .form-input {
+    @apply w-full px-4 py-3 border border-neutral-200 rounded-lg
+      bg-white text-neutral-900
+      focus:outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100
+      transition-colors duration-150
+      placeholder:text-neutral-400;
+  }
+
+  .form-textarea {
+    @apply form-input resize-none min-h-[120px];
+  }
+
+  .form-error {
+    @apply text-sm text-error-DEFAULT mt-1;
+  }
+
+  .form-helper {
+    @apply text-sm text-neutral-600 mt-1;
+  }
+
+  /* ==================== ALERTS ==================== */
+
+  .alert {
+    @apply px-4 py-3 rounded-lg text-sm font-medium;
+  }
+
+  .alert-success {
+    @apply alert bg-success-light text-success-DEFAULT border border-success-DEFAULT;
+  }
+
+  .alert-error {
+    @apply alert bg-error-light text-error-DEFAULT border border-error-DEFAULT;
+  }
+
+  .alert-warning {
+    @apply alert bg-warning-light text-warning-DEFAULT border border-warning-DEFAULT;
+  }
+
+  .alert-info {
+    @apply alert bg-info-light text-info-DEFAULT border border-info-DEFAULT;
+  }
+
+  /* ==================== LINKS ==================== */
+
+  .link {
+    @apply text-brand-600 hover:text-brand-700 underline underline-offset-4
+      transition-colors duration-150;
+  }
+
+  /* ==================== TYPOGRAPHY PROSE ==================== */
 
   /* Legal prose — vertical rhythm tuned for long-form reading. */
   .legal-prose h2 {
-    @apply font-display font-semibold text-2xl mt-12 mb-4 text-ink;
+    @apply font-display font-semibold text-3xl mt-12 mb-6 text-neutral-900;
   }
 
   .legal-prose h3 {
-    @apply font-sans font-semibold text-base mt-6 mb-2 text-ink uppercase tracking-wider;
+    @apply font-sans font-semibold text-lg mt-8 mb-4 text-neutral-900 uppercase tracking-wide;
   }
 
   .legal-prose p {
-    @apply text-ink-muted leading-relaxed mb-4;
+    @apply text-neutral-700 leading-relaxed mb-4;
   }
 
   .legal-prose ul {
-    @apply list-disc pl-6 space-y-2 mb-4 text-ink-muted;
+    @apply list-disc pl-6 space-y-2 mb-4 text-neutral-700;
   }
 
   .legal-prose a {
-    @apply text-forest underline underline-offset-4 hover:text-amber transition-colors;
+    @apply text-brand-600 underline underline-offset-4 hover:text-brand-700 transition-colors;
   }
 
   .legal-prose strong {
-    @apply text-ink font-semibold;
+    @apply text-neutral-900 font-semibold;
   }
 }
