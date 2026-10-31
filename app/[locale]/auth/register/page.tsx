@@ -136,30 +136,32 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         {/* Logo/Brand */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-neutral-900 mb-2">Wapsell</h1>
-          <p className="text-neutral-600">Crea tu cuenta en segundos</p>
+          <h1 className="text-3xl md:text-4xl font-bold text-neutral-900 mb-2">Wapsell</h1>
+          <p className="text-neutral-600">Gestiona tus ventas en WhatsApp</p>
         </div>
 
         {/* Registration Card */}
         <Card shadow="md">
           <CardHeader
             title="Crear Cuenta"
-            description="Regístrate para acceder a Wapsell"
+            description="Regístrate para empezar a vender en WhatsApp"
           />
 
           <CardBody>
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Success Alert */}
               {successMessage && (
-                <div className="alert alert-success">
-                  ✓ {successMessage}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800 text-sm font-medium animate-pulse">
+                  <span className="inline-block mr-2">✓</span>
+                  {successMessage}
                 </div>
               )}
 
               {/* Error Alert */}
               {error && (
-                <div className="alert alert-error">
-                  ⚠️ {error}
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 text-sm font-medium">
+                  <span className="inline-block mr-2">⚠️</span>
+                  {error}
                 </div>
               )}
 
@@ -168,7 +170,7 @@ export default function RegisterPage() {
                 type="text"
                 name="name"
                 label="Nombre completo"
-                placeholder="Tu nombre"
+                placeholder="Juan Pérez"
                 value={formData.name}
                 onChange={handleChange}
                 required
@@ -187,6 +189,7 @@ export default function RegisterPage() {
                 required
                 disabled={loading}
                 error={fieldErrors.email}
+                helper="Usaremos este email para tu cuenta"
               />
 
               {/* Password Input */}
@@ -207,7 +210,7 @@ export default function RegisterPage() {
               <Input
                 type="password"
                 name="password_confirm"
-                label="Confirmar Contraseña"
+                label="Confirmar contraseña"
                 placeholder="••••••••"
                 value={formData.password_confirm}
                 onChange={handleChange}
@@ -216,24 +219,50 @@ export default function RegisterPage() {
                 error={fieldErrors.password_confirm}
               />
 
-              {/* Privacy Agreement */}
-              <label className="flex items-start gap-3 text-sm text-neutral-600">
+              {/* Terms and Privacy Checkbox */}
+              <div className="flex items-start gap-3 py-2">
                 <input
                   type="checkbox"
-                  required
-                  className="mt-1 w-4 h-4"
+                  id="accept-terms"
+                  checked={acceptTerms}
+                  onChange={(e) => {
+                    setAcceptTerms(e.target.checked);
+                    if (fieldErrors.acceptTerms) {
+                      setFieldErrors((prev) => ({
+                        ...prev,
+                        acceptTerms: undefined,
+                      }));
+                    }
+                  }}
+                  disabled={loading}
+                  className="mt-1 rounded border-neutral-300 text-brand-600 focus:ring-brand-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <span>
+                <label htmlFor="accept-terms" className="text-sm text-neutral-600 leading-relaxed cursor-pointer flex-1">
                   Acepto los{" "}
-                  <Link href="/terms" className="text-brand-600 hover:text-brand-700 font-medium">
-                    términos de servicio
-                  </Link>{" "}
-                  y la{" "}
-                  <Link href="/privacy" className="text-brand-600 hover:text-brand-700 font-medium">
-                    política de privacidad
+                  <Link
+                    href="/terms"
+                    className="text-brand-600 hover:text-brand-700 font-medium underline"
+                    target="_blank"
+                  >
+                    Términos y Condiciones
                   </Link>
-                </span>
-              </label>
+                  {" "}y la{" "}
+                  <Link
+                    href="/privacy"
+                    className="text-brand-600 hover:text-brand-700 font-medium underline"
+                    target="_blank"
+                  >
+                    Política de Privacidad
+                  </Link>
+                </label>
+              </div>
+
+              {/* Terms Error */}
+              {fieldErrors.acceptTerms && (
+                <p className="text-sm text-red-600 font-medium">
+                  {fieldErrors.acceptTerms}
+                </p>
+              )}
 
               {/* Submit Button */}
               <Button
@@ -242,26 +271,30 @@ export default function RegisterPage() {
                 fullWidth
                 size="lg"
                 loading={loading}
+                disabled={loading || !acceptTerms}
               >
-                Crear Cuenta
+                {loading ? "Creando cuenta..." : "Registrarse"}
               </Button>
             </form>
           </CardBody>
 
-          <CardFooter className="flex flex-col items-center">
+          <CardFooter className="flex flex-col items-center gap-4">
             <p className="text-sm text-neutral-600">
               ¿Ya tienes cuenta?{" "}
               <Link href="/auth/login" className="text-brand-600 hover:text-brand-700 font-semibold">
-                Inicia sesión aquí
+                Inicia sesión
               </Link>
             </p>
           </CardFooter>
         </Card>
 
-        {/* Footer */}
+        {/* Footer Info */}
         <p className="text-center text-xs text-neutral-600 mt-8">
           ¿Preguntas? Contacta con{" "}
-          <a href="mailto:support@wapsell.com" className="text-brand-600 hover:text-brand-700 font-medium">
+          <a
+            href="mailto:support@wapsell.com"
+            className="text-brand-600 hover:text-brand-700 font-medium"
+          >
             support@wapsell.com
           </a>
         </p>

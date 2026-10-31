@@ -5,6 +5,8 @@ import { useState } from "react";
 type ModuleKey = "inbox" | "catalog" | "orders" | "sales" | "stock" | "purchases" | "cash" | "customers" | "reports" | "team" | "brand";
 type Message = { id: number; from: "customer" | "business"; text: string; time: string };
 type Conversation = { id: number; name: string; initials: string; color: string; phone: string; preview: string; time: string; unread: number; status: string; messages: Message[] };
+type NavItem = { key: ModuleKey; label: string; icon: string; count?: string };
+type NavGroup = { label: string; items: NavItem[] };
 
 const initialConversations: Conversation[] = [
   { id: 1, name: "Martín González", initials: "MG", color: "#D9E9C8", phone: "+54 9 11 4567-1122", preview: "¿Me preparás el pedido para hoy?", time: "10:42", unread: 2, status: "Cliente frecuente", messages: [
@@ -46,7 +48,7 @@ const initialOrders = [
 ];
 const money = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
 
-const navGroups = [
+const navGroups: NavGroup[] = [
   { label: "VENTAS", items: [{ key: "inbox" as const, label: "Mensajería", icon: "◌", count: "3" }, { key: "orders" as const, label: "Pedidos", icon: "▤", count: "2" }, { key: "sales" as const, label: "Ventas", icon: "↗" }, { key: "customers" as const, label: "Clientes", icon: "♙" }] },
   { label: "OPERACIONES", items: [{ key: "catalog" as const, label: "Catálogo", icon: "▦" }, { key: "stock" as const, label: "Stock", icon: "▥" }, { key: "purchases" as const, label: "Compras", icon: "⇩" }, { key: "cash" as const, label: "Caja", icon: "▣" }] },
   { label: "NEGOCIO", items: [{ key: "reports" as const, label: "Reportes", icon: "▥" }, { key: "team" as const, label: "Equipo y permisos", icon: "♧" }, { key: "brand" as const, label: "Marca y negocio", icon: "✳" }] },

@@ -1,0 +1,27 @@
+
+> wapsell@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3001
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 122.7s
+ ✓ Compiled /middleware in 960ms
+ ✓ Compiled (154 modules)
+ ○ Compiling /[locale] ...
+ ✓ Compiled /[locale]/auth/register in 32.9s (682 modules)
+ GET /es/auth/register 200 in 14654ms
+ GET /es 200 in 63ms
+ GET /es/auth/login 200 in 71ms
+ GET /es/auth/signup 404 in 27ms
+ GET /es/auth/register 200 in 78ms
+ GET /es 200 in 62ms
+ GET /es/auth/login 200 in 124ms
+ GET /es/auth/signup 404 in 35ms
+ GET /es/auth/register 200 in 129ms
+ GET /es/auth/signup 404 in 67ms
+ ✓ Compiled in 12s (295 modules)
+ ✓ Compiled in 1014ms (295 modules)

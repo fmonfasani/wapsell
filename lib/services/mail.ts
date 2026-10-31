@@ -60,7 +60,7 @@ export class MailService {
         to: options.to,
         subject: options.subject,
         html: options.html,
-        replyTo: options.replyTo,
+        reply_to: options.replyTo,
       });
 
       if (error) {

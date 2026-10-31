@@ -7,7 +7,6 @@ import {
   Link,
   Section,
   Hr,
-  Footer,
   Row,
   Column,
 } from '@react-email/components';
@@ -131,14 +130,14 @@ export default function OrderConfirmationEmail({
             </Text>
           </Section>
 
-          <Footer style={footerStyle}>
+          <Section style={footerStyle}>
             <Text style={footerTextStyle}>
               © 2025 Wapsell. All rights reserved.
             </Text>
             <Text style={footerTextStyle}>
               Wapsell — AI WhatsApp sales agent for premium real estate
             </Text>
-          </Footer>
+          </Section>
         </Container>
       </Body>
     </Html>

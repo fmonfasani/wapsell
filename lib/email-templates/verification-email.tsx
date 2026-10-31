@@ -7,7 +7,6 @@ import {
   Link,
   Section,
   Hr,
-  Footer,
 } from '@react-email/components';
 
 interface VerificationEmailProps {
@@ -58,14 +57,14 @@ export default function VerificationEmail({
             </Text>
           </Section>
 
-          <Footer style={footerStyle}>
+          <Section style={footerStyle}>
             <Text style={footerTextStyle}>
               © 2025 Wapsell. All rights reserved.
             </Text>
             <Text style={footerTextStyle}>
               Wapsell — AI WhatsApp sales agent for premium real estate
             </Text>
-          </Footer>
+          </Section>
         </Container>
       </Body>
     </Html>
